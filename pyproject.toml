@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sll-core"
+version = "0.1.0"
+description = "Static Local Linearization (SLL): zero-intrusive auto-differentiation for discrete programs"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "SLL Team", email = "sll@example.com"}
+]
+keywords = ["autograd", "differentiable", "discrete", "optimization", "pytorch"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=1.9.0",
+    "numpy>=1.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=22.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourname/sll-core"
+Repository = "https://github.com/yourname/sll-core"
+Issues = "https://github.com/yourname/sll-core/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sll"]
