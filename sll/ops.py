@@ -6,6 +6,11 @@ SLL 算子实现
 import torch
 import torch.nn.functional as F
 
+# 保存原始 torch 函数引用，避免 patch 后递归
+_torch_round = torch.round
+_torch_floor = torch.floor
+_torch_ceil = torch.ceil
+
 
 def heaviside(x, eps=1e-3):
     """
@@ -60,12 +65,12 @@ def round(x, eps=1e-3):
     if eps <= 0:
         raise ValueError(f"eps must be positive, got {eps}")
     
-    hard = torch.round(x).detach()
+    hard = _torch_round(x).detach()
     diff = x - hard  # 到最近整数的偏差，范围 [-0.5, 0.5]
     
     close_to_integer = torch.abs(diff) <= eps
     
-    floor_x = torch.floor(x).detach()
+    floor_x = _torch_floor(x).detach()
     frac = x - floor_x  # 小数部分 [0, 1)
     close_to_boundary = torch.abs(frac - 0.5) <= eps
     
@@ -92,7 +97,7 @@ def floor(x, eps=1e-3):
     if eps <= 0:
         raise ValueError(f"eps must be positive, got {eps}")
     
-    hard = torch.floor(x)
+    hard = _torch_floor(x)
     diff = x - hard  # 小数部分，范围 [0, 1)
     
     return torch.where(
@@ -111,7 +116,7 @@ def ceil(x, eps=1e-3):
     if eps <= 0:
         raise ValueError(f"eps must be positive, got {eps}")
     
-    hard = torch.ceil(x)
+    hard = _torch_ceil(x)
     diff = x - hard  # 范围 (-1, 0]
     
     return torch.where(
