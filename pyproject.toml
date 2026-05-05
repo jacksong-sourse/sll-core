@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [
-    {name = "SLL Team", email = "sll@example.com"}
+    {name = "Jacksong", email = "15011462616@163.com"}
 ]
 keywords = ["autograd", "differentiable", "discrete", "optimization", "pytorch"]
 classifiers = [
@@ -32,9 +32,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourname/sll-core"
-Repository = "https://github.com/yourname/sll-core"
-Issues = "https://github.com/yourname/sll-core/issues"
+Repository = "https://github.com/jacksong-sourse/sll-core"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sll"]
