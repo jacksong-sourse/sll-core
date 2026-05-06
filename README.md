@@ -9,6 +9,10 @@
 ![Python](https://img.shields.io/pypi/pyversions/sll-core)
 ![Stars](https://img.shields.io/github/stars/jacksong-sourse/sll-core?style=social)
 
+<p align="center">
+  <a href="./README.md">中文</a> | <a href="./README_EN.md">English</a>
+</p>
+
 </div>
 
 ---
