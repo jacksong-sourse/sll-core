@@ -1,145 +1,202 @@
-# SLL-Core: Static Local Linearization
+<div align="center">
 
-**离散程序的零侵入可微分化引擎**
+🔷 SLL-Core: Static Local Linearization
 
-SLL（静态局部线性化程序变换）在程序入口处将不可微的硬决策边界替换为 ε-长度的局部线段，使程序全程可微；优化完成后在出口处严格恢复原始硬逻辑。当 ε→0 时，最优解收敛到原始程序最优解，误差无限小。
+离散程序的零侵入可微分化引擎
 
----
+</div>
 
-## 核心特性
+🤯 问题：为什么离散程序无法自动求导？
 
-- **零侵入**：无需重写业务代码，前后加几行即可
-- **零残留**：出口严格恢复硬逻辑，部署时无性能损失
-- **梯度有效**：边界附近导数为常数，无 Sigmoid 式梯度消失
-- **框架原生**：基于 PyTorch，与 `torch.autograd` 无缝兼容
+在深度学习里，离散决策无处不在：
 
----
+- 量化：
+"round(x)"、
+"floor(x)"
+- 阈值判断：
+"sign(x)"、
+"x > 0"
+- 分类选择：
+"argmax(x)"
 
-## 安装
+但这些操作都有一个致命特性：梯度几乎处处为零，导致标准反向传播直接失效。
 
-```bash
-pip install sll-core
-```
+x = torch.tensor([0.5], requires_grad=True)
+y = torch.sign(x)   # ❌ 梯度为 0，参数永远更新不了
+loss = (y - target).pow(2).sum()
+loss.backward()
+print(x.grad)       # tensor([0.]) ← 死了
 
----
+传统方案的痛点
 
-## 快速开始
+方法 是否需要改代码 部署有残留 梯度质量 收敛稳定性
+硬函数直接训练 ✅ 无需改动 ✅ 无残留 ❌ 零梯度，无法训练 ❌ 完全不收敛
+Sigmoid / Softmax 松弛 ❌ 重写模型 ❌ 有近似误差 ⚠️ 梯度消失/爆炸 ⚠️ 调参困难
+Straight-Through Estimator (STE) ❌ 手写自定义梯度 ✅ 无残留 ⚠️ 梯度方向不准 ⚠️ 容易震荡
+重参数化 / Gumbel-Softmax ❌ 改模型结构 ❌ 有温度参数残留 ⚠️ 高方差 ⚠️ 慢
+⭐ SLL (静态局部线性化) ✅ 零侵入 ✅ 严格恢复硬逻辑 ✅ 常数梯度，无消失 ✅ 稳定收敛
 
-### 基础用法示例
+SLL 的核心洞察：不需要在整个定义域上做近似，只在决策边界附近 ε-区间内做局部线性化，其余区域保持原始硬逻辑。当 
+"ε → 0" 时，最优解收敛到原始离散问题的最优解。
 
-```python
+⚡ 一句话解决
+
 import torch
 import sll
 
-# 创建输入张量（需要 requires_grad=True）
 x = torch.tensor([-1.0, 0.0, 1.0], requires_grad=True)
 
-# 使用上下文管理器（推荐方式）
-with sll.linearize(eps=1e-2):
-    # 所有 torch 离散算子自动走 SLL 路径
-    y = torch.sign(x)
+with sll.linearize(eps=1e-2):     # ← 就这行
+    y = torch.sign(x)              # 自动可微！
     z = torch.round(y * 10)
-    
-    # 计算损失并反向传播
     loss = z.sum()
     loss.backward()
-    
-    # 梯度正常回传！
-    print("梯度:", x.grad)
 
-# 离开上下文后，torch.sign 恢复为原始硬逻辑
-y_hard = torch.sign(x)
-print("硬逻辑结果:", y_hard)
-```
+print(x.grad)                      # 梯度正常回传 ✅
 
-### 装饰器用法
+离开上下文后，
+"torch.sign" 自动恢复原始硬逻辑——训练时可微，部署时零开销。
 
-```python
+📊 SLL 为什么更好？
+
+梯度质量对比
+
+ 硬函数 STE Sigmoid 松弛 SLL
+前向输出 
+"[-1, 0, 1]" 
+"[-1, 0, 1]" 连续值（有误差） 精确硬输出
+边界附近梯度 
+"0" 
+"1"（常数） 高斯峰（易消失） 常数 
+"1/(2ε)"
+远离边界梯度 
+"0" 
+"1" ≈
+"0" 
+"0"（硬逻辑）
+是否需要调温度参数 — — 需要调 
+"β" 无需调参
+
+可视化对比
+
+<p align="center">
+
+<img src="sll_comparison.png" alt="SLL 对比图" width="90%">
+
+</p>
+
+上图展示了：
+
+1. 左上：SLL 在 
+"|x| > ε" 时严格等于硬 Sign，在边界附近平滑过渡
+2. 中上：SLL 梯度在边界区间内为常数，无 Sigmoid 式梯度消失问题
+3. 右上：SLL Round 在整数点附近线性过渡，远离边界完全等于硬 Round
+4. 左下：SLL 只在 
+"[-ε, ε]" 区间内做局部线性化，其余区域不受影响
+5. 中下：
+"ε" 越小，越接近硬函数；
+"ε" 越大，过渡越平滑
+6. 右下：SLL 可以稳定收敛，硬函数完全无法优化
+
+🚀 安装
+
+pip install sll-core
+
+要求：Python ≥ 3.8，PyTorch ≥ 1.9.0
+
+🎯 快速开始
+
+方式一：上下文管理器（推荐）
+
+一行包裹，零侵入改造现有代码：
+
 import torch
 import sll
+
+model = MyDiscreteModel()          # 你的原始模型，无需改动
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+for epoch in range(100):
+    x = torch.randn(32, 10)
+    target = torch.randn(32, 1)
+
+    with sll.linearize(eps=1e-2): # ← 训练时加这一行
+        y = model(x)
+        loss = (y - target).pow(2).sum()
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+# 部署时：直接 model(x)，无需 SLL，零开销 ✅
+
+方式二：装饰器
 
 @sll.enable(eps=1e-2)
 def quantized_model(x):
-    """带量化操作的模型"""
-    # 模拟量化：乘以 2 取整后除以 2
     quantized = torch.round(x * 2) / 2
-    # 应用符号函数
-    output = torch.sign(quantized)
-    return output
+    return torch.sign(quantized)
 
-# 使用模型
 x = torch.randn(5, requires_grad=True)
 y = quantized_model(x)
-y.sum().backward()  # 梯度正常计算
-```
+y.sum().backward()                  # 梯度正常计算
 
----
+方式三：显式调用（不 patch 全局状态）
 
-## 使用说明
-
-### 支持的算子
-
-SLL 目前支持以下离散算子的可微版本：
-
-| 算子 | 描述 | 示例 |
-|------|------|------|
-| `heaviside` | Heaviside 阶跃函数 | `sll.heaviside(x)` |
-| `sign` | 符号函数 | `sll.sign(x)` / `torch.sign(x)` |
-| `round` | 四舍五入 | `sll.round(x)` / `torch.round(x)` |
-| `floor` | 向下取整 | `sll.floor(x)` / `torch.floor(x)` |
-| `ceil` | 向上取整 | `sll.ceil(x)` / `torch.ceil(x)` |
-| `threshold` | 通用阈值函数 | `sll.threshold(x, threshold=0.5)` |
-| `argmax` | 返回 soft-one-hot 编码 | `sll.argmax(x, dim=1)` |
-
-### 三种使用方式
-
-#### 方式1：上下文管理器（推荐）
-
-使用 `sll.linearize()` 上下文管理器，在代码块内自动 patch torch 离散算子：
-
-```python
-with sll.linearize(eps=1e-2):
-    # 此代码块内的 torch.sign, torch.round 等自动走 SLL
-    y = torch.sign(x)
-    z = torch.round(y)
-    loss = z.sum()
-    loss.backward()
-# 离开上下文后自动恢复原始逻辑
-```
-
-#### 方式2：装饰器
-
-使用 `@sll.enable()` 装饰器包装整个函数：
-
-```python
-@sll.enable(eps=1e-2)
-def my_function(x):
-    return torch.round(x)
-
-y = my_function(x)
-```
-
-#### 方式3：显式调用（不 patch 全局状态）
-
-直接调用 `sll` 模块的函数，不影响全局 torch 行为：
-
-```python
 y = sll.heaviside(x, eps=1e-2)
 z = sll.sign(y, eps=1e-2)
-```
 
-### 参数说明
+📋 支持的可微离散算子
 
-- **eps**：线性化区间半宽，默认值为 `1e-3`。
-  - 当输入值距离硬边界小于等于 `eps` 时，使用线性化近似
-  - 当输入值距离硬边界大于 `eps` 时，使用原始硬逻辑
-  - `eps` 越小，越接近原始硬逻辑，但梯度可能不稳定
+算子 描述 使用示例
 
-### 实际应用示例
+"heaviside" Heaviside 阶跃函数 
+"sll.heaviside(x)"
 
-#### 示例1：训练带离散决策的模型
+"sign" 符号函数 
+"sll.sign(x)" / 
+"torch.sign(x)"
 
-```python
+"round" 四舍五入 
+"sll.round(x)" / 
+"torch.round(x)"
+
+"floor" 向下取整 
+"sll.floor(x)" / 
+"torch.floor(x)"
+
+"ceil" 向上取整 
+"sll.ceil(x)" / 
+"torch.ceil(x)"
+
+"threshold" 通用阈值函数 
+"sll.threshold(x, threshold=0.5)"
+
+"argmax" Soft one-hot 编码 
+"sll.argmax(x, dim=1)"
+
+🔬 实际应用场景
+
+场景 1：量化感知训练 (QAT)
+
+import torch
+import sll
+
+def quantize(x, levels=256):
+    scale = (levels - 1) / (x.max() - x.min() + 1e-10)
+    return torch.round((x - x.min()) * scale) / scale + x.min()
+
+x = torch.randn(10, requires_grad=True)
+
+with sll.linearize(eps=1e-3):
+    y = quantize(x)                 # 量化操作可微了！
+    loss = y.sum()
+    loss.backward()
+
+print("量化梯度:", x.grad)          # ✅ 梯度正常回传
+
+场景 2：带硬阈值激活的网络
+
 import torch
 import torch.nn as nn
 import sll
@@ -148,85 +205,69 @@ class DiscreteModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.linear = nn.Linear(10, 5)
-    
+
     def forward(self, x):
         x = self.linear(x)
-        # 硬阈值激活（不可微）
-        return (x > 0).float()
+        return (x > 0).float()          # 硬阈值，原本不可微
 
 model = DiscreteModel()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-# 使用 SLL 训练
-for epoch in range(100):
-    x = torch.randn(32, 10, requires_grad=True)
-    
-    with sll.linearize(eps=1e-2):
-        y = model(x)
-        loss = (y - target).pow(2).sum()
-    
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-```
+# 用 SLL 训练——模型代码完全不用改！
+with sll.linearize(eps=1e-2):
+    y = model(x)
+    loss = (y - target).pow(2).sum()
 
-#### 示例2：量化感知训练
+optimizer.zero_grad()
+loss.backward()
+optimizer.step()
 
-```python
-import torch
-import sll
+🧮 数学原理
 
-def quantize(x, levels=256):
-    """模拟量化操作"""
-    scale = (levels - 1) / (x.max() - x.min() + 1e-10)
-    quantized = torch.round((x - x.min()) * scale) / scale + x.min()
-    return quantized
+SLL 在离散决策边界附近建立局部线性化区间：
 
-# 训练时使用 SLL
-x = torch.randn(10, requires_grad=True)
-
-with sll.linearize(eps=1e-3):
-    y = quantize(x)
-    loss = y.sum()
-    loss.backward()
-
-print("量化梯度:", x.grad)
-```
-
----
-
-## 原理简介
-
-SLL 的核心思想是在离散决策边界附近建立局部线性化区间：
-
-1. **入口处理**：在程序入口处，将所有硬边界（如 `sign`, `round`, `argmax`）替换为 ε-局部线性函数
-2. **可微计算**：在前向传播中，边界附近的输入使用线性近似，保证处处可微
-3. **梯度回传**：反向传播时，边界附近的导数为常数（线性函数的斜率）
-4. **出口恢复**：在程序出口处，严格恢复原始硬逻辑，确保部署时无性能损失
-
-### 数学形式
+1. 入口处理：硬边界替换为 ε-局部线性函数
+2. 可微计算：边界附近使用线性近似，保证处处可微
+3. 梯度回传：边界附近导数为常数，无梯度消失
+4. 出口恢复：严格恢复原始硬逻辑，部署零开销
 
 以 Heaviside 阶跃函数为例：
 
-```
-          | 0.5 + x/(2ε)    当 |x| ≤ ε
-y'(x) =  |
-          | H(x)            其他
-```
+         | 0.5 + x/(2ε)    当 |x| ≤ ε
+y(x) =  |
+         | H(x)            其他
 
-其中 `H(x)` 是原始的 Heaviside 阶跃函数。当 `ε→0` 时，`y'(x)` 收敛到 `H(x)`。
+其中 
+"H(x)" 是原始 Heaviside 函数。当 
+"ε → 0" 时，
+"y(x) → H(x)"，最优解收敛到原始问题最优解。
 
----
+⚙️ 参数说明
 
-## 注意事项
+- 
+"eps"：线性化区间半宽，默认 
+"1e-3"
+   - 输入距离硬边界 ≤ 
+"eps"：使用线性化近似
+   - 输入距离硬边界 > 
+"eps"：使用原始硬逻辑
+   - 
+"eps" 越小，越接近硬逻辑，梯度区域越窄
+   - 
+"eps" 越大，过渡越平滑，近似区域越宽
 
-1. **ε 参数选择**：`eps` 过小时梯度可能不稳定，过大时近似误差较大，建议根据实际任务调整
-2. **Tensor 方法**：对于 `x.sign()` 等 Tensor 方法，SLL 会尽力拦截，但建议使用 `torch.sign(x)` 确保一致性
-3. **比较运算符**：Python 比较运算符（如 `x > 0`）无法被拦截，建议使用 `sll.threshold(x)` 替代
-4. **部署阶段**：部署时无需加载 SLL，训练完成后直接使用原始代码即可
+⚠️ 注意事项
 
----
+1. Tensor 方法建议：
+"x.sign()" 等 Tensor 方法 SLL 会尽力拦截，但建议用 
+"torch.sign(x)" 确保一致性
+2. 比较运算符：Python 比较（如 
+"x > 0"）无法被拦截，建议用 
+"sll.threshold(x)" 替代
+3. 部署阶段：训练完成后直接部署原始代码，无需加载 SLL，零性能损失
+4. ε 选择：建议从 
+"1e-2" 开始，根据任务收敛情况微调
 
-## 许可证
+📄 许可证
 
 MIT License
