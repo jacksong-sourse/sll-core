@@ -6,6 +6,11 @@
 
 </div>
 
+![PyPI](https://img.shields.io/pypi/v/sll-core)
+![License](https://img.shields.io/github/license/jacksong-sourse/sll-core)
+![Python](https://img.shields.io/pypi/pyversions/sll-core)
+![Stars](https://img.shields.io/github/stars/jacksong-sourse/sll-core?style=social)
+
 ---
 
 ## 🤯 问题：为什么离散程序无法自动求导？
