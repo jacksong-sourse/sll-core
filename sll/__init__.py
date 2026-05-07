@@ -25,7 +25,7 @@ from .ops import (
     soft_for,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.7"
 
 __all__ = [
     "linearize",
