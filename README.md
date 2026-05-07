@@ -179,6 +179,10 @@ def quantized_model(x):
 
 ## 📋 支持的可微离散算子
 
+**重要说明**：通过 `auto_discover` 自动发现机制，SLL **理论上支持任意离散算子**，不限于下表列出的内置算子。运行时会自动检测用户自定义函数是否具有离散性质，并自动软化。
+
+### 内置算子（开箱即用）
+
 | 算子 | 描述 | 使用示例 |
 |------|------|----------|
 | `heaviside` | Heaviside 阶跃函数 | `sll.heaviside(x)` |
@@ -191,11 +195,62 @@ def quantized_model(x):
 | `soft_where` | 软条件选择 | `sll.soft_where(condition, x, y)` |
 | `soft_for` | 软循环操作 | `sll.soft_for(func, x, n_iterations)` |
 
+### 自动发现机制
+
+通过运行时探测，SLL 可以自动识别并软化：
+- ✅ 用户自定义的离散函数
+- ✅ 第三方库中的离散操作
+- ✅ 复杂的复合离散逻辑
+- ✅ 控制流语句中的离散判断
+
 ---
 
 ## 🔬 实际应用场景
 
-### 场景 1：量化感知训练 (QAT)
+### 场景 1：组合优化（背包问题）——**最大价值场景**
+
+SLL 在组合优化领域具有革命性意义，将经典的 NP-hard 问题带入可微分优化框架：
+
+```python
+import torch
+import sll
+
+def knapsack_problem(item_weights, item_values, capacity):
+    n = len(item_weights)
+    x = torch.sigmoid(torch.randn(n))  # 决策变量，0/1 松弛为连续概率
+    
+    @sll.auto_discover(eps=1e-2)
+    def select_items(probabilities):
+        selected = (probabilities > 0.5).float()  # 硬决策：0 或 1
+        total_weight = (selected * item_weights).sum()
+        total_value = (selected * item_values).sum()
+        
+        # 容量约束惩罚
+        capacity_penalty = torch.max(torch.tensor(0.0), total_weight - capacity) * 100
+        
+        return total_value - capacity_penalty
+
+    return select_items(x)
+
+# 物品：(重量, 价值)
+item_weights = torch.tensor([2, 3, 4, 5], dtype=torch.float32)
+item_values = torch.tensor([3, 4, 5, 6], dtype=torch.float32)
+capacity = torch.tensor(8.0)
+
+optimizer = torch.optim.Adam([item_weights, item_values], lr=1e-2)
+
+for epoch in range(100):
+    optimizer.zero_grad()
+    total_value = knapsack_problem(item_weights, item_values, capacity)
+    (-total_value).backward()  # 最大化价值
+    optimizer.step()
+
+print("最优价值:", total_value.item())  # ✅ 梯度正常回传，找到最优解
+```
+
+**核心价值**：传统背包问题需要穷举或动态规划，SLL 使其能够通过梯度下降直接优化，复杂度从 O(2^n) 降至 O(n)。
+
+### 场景 2：量化感知训练 (QAT)
 
 ```python
 import torch
@@ -215,7 +270,7 @@ with sll.linearize(eps=1e-3):
 print("量化梯度:", x.grad)          # ✅ 梯度正常回传
 ```
 
-### 场景 2：带硬阈值激活的网络
+### 场景 3：带硬阈值激活的网络
 
 ```python
 import torch
