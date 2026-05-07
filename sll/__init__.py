@@ -5,7 +5,14 @@ Static Local Linearization (SLL) Core
 使程序全程可微；优化完成后出口严格恢复原始硬逻辑。
 """
 
-from .core import linearize, patch, unpatch, enable
+from .core import (
+    linearize,
+    patch,
+    unpatch,
+    enable,
+    auto_discover,
+    hard_mode,
+)
 from .ops import (
     heaviside,
     sign,
@@ -14,15 +21,19 @@ from .ops import (
     ceil,
     threshold,
     argmax,
+    soft_where,
+    soft_for,
 )
 
-__version__ = "0.1.5"
+__version__ = "0.1.0"
 
 __all__ = [
     "linearize",
     "patch",
     "unpatch",
     "enable",
+    "auto_discover",
+    "hard_mode",
     "heaviside",
     "sign",
     "round",
@@ -30,4 +41,6 @@ __all__ = [
     "ceil",
     "threshold",
     "argmax",
+    "soft_where",
+    "soft_for",
 ]

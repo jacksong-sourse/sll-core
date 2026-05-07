@@ -6,11 +6,6 @@ SLL 算子实现
 import torch
 import torch.nn.functional as F
 
-# 保存原始 torch 函数引用，避免 patch 后递归
-_torch_round = torch.round
-_torch_floor = torch.floor
-_torch_ceil = torch.ceil
-
 
 def heaviside(x, eps=1e-3):
     """
@@ -65,12 +60,12 @@ def round(x, eps=1e-3):
     if eps <= 0:
         raise ValueError(f"eps must be positive, got {eps}")
     
-    hard = _torch_round(x).detach()
+    hard = torch.round(x).detach()
     diff = x - hard  # 到最近整数的偏差，范围 [-0.5, 0.5]
     
     close_to_integer = torch.abs(diff) <= eps
     
-    floor_x = _torch_floor(x).detach()
+    floor_x = torch.floor(x).detach()
     frac = x - floor_x  # 小数部分 [0, 1)
     close_to_boundary = torch.abs(frac - 0.5) <= eps
     
@@ -97,7 +92,7 @@ def floor(x, eps=1e-3):
     if eps <= 0:
         raise ValueError(f"eps must be positive, got {eps}")
     
-    hard = _torch_floor(x)
+    hard = torch.floor(x)
     diff = x - hard  # 小数部分，范围 [0, 1)
     
     return torch.where(
@@ -116,7 +111,7 @@ def ceil(x, eps=1e-3):
     if eps <= 0:
         raise ValueError(f"eps must be positive, got {eps}")
     
-    hard = _torch_ceil(x)
+    hard = torch.ceil(x)
     diff = x - hard  # 范围 (-1, 0]
     
     return torch.where(
@@ -165,3 +160,59 @@ def argmax(x, dim=-1, eps=1e-3):
     
     # 归一化保持概率/权重语义
     return weights / (weights.sum(dim=dim, keepdim=True) + 1e-12)
+
+
+def soft_where(condition, x, y, eps=1e-3):
+    """
+    软 where 操作：在条件边界附近线性化，使梯度能够回传。
+    
+    数学形式:
+        y' = t * x + (1-t) * y
+        其中 t = heaviside(condition, eps)
+    
+    参数:
+        condition: 布尔张量或浮点张量（将被视为概率）
+        x: condition 为 True 时的值
+        y: condition 为 False 时的值
+        eps: 线性化区间半宽
+    
+    返回:
+        与 x, y 同形状的可微张量
+    """
+    if eps <= 0:
+        raise ValueError(f"eps must be positive, got {eps}")
+    
+    if condition.dtype == torch.bool:
+        condition = condition.float()
+    
+    t = heaviside(condition - 0.5, eps)
+    return t * x + (1 - t) * y
+
+
+def soft_for(func, x, n_iterations, eps=1e-3):
+    """
+    软循环：将循环展开为加权求和，使梯度能够跨循环边界回传。
+    
+    参数:
+        func: 迭代函数，接受 (x, iteration_idx) 返回新的 x
+        x: 初始输入张量
+        n_iterations: 迭代次数
+        eps: 软化系数
+    
+    返回:
+        迭代后的张量
+    """
+    if eps <= 0:
+        raise ValueError(f"eps must be positive, got {eps}")
+    
+    result = x.detach().clone()
+    accumulator = torch.zeros_like(x)
+    
+    for i in range(n_iterations):
+        t = float(i + 1) / n_iterations
+        weight = heaviside(t - 0.5, eps) * (1 - eps) + eps
+        
+        result = func(result, i)
+        accumulator = accumulator * (1 - weight) + result * weight
+    
+    return accumulator
