@@ -154,6 +154,8 @@ def discrete_controller(state):
     return action
 ```
 
+### **注意**：Sll-Core可应用在几乎所有离散操作是"少量、局部"的，整体框架还是基于梯度下降的代码里，目前仅仅展示了3个。
+
 ***
 
 ## ⚙️ 参数说明
@@ -352,8 +354,8 @@ pytest tests/ -v
 ```bibtex
 @software{sll-core,
   title = {SLL-Core: Static Local Linearization for Differentiable Discrete Programming},
-  author = {Jackson Guo},
-  year = {2024},
+  author = {Jacksong},
+  year = {2026},
   url = {https://github.com/jacksong-sourse/sll-core},
 }
 ```
