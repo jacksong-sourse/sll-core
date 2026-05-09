@@ -13,6 +13,13 @@
   <a href="./README.md">中文</a> | <a href="./README_EN.md">English</a>
 </p>
 
+@software{sll_core_2026,
+  author = 宋梓铭 Jacksong,
+  title = {SLL-Core: Static Local Linearization for Differentiable Discrete Programming},
+  url = {(https://github.com/jacksong-sourse/sll-core)},
+  year = {2026}
+}
+
 </div>
 
 ---
