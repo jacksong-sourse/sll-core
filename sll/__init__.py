@@ -14,4 +14,4 @@ __all__ = [
     'threshold',
 ]
 
-__version__ = '0.1.9'
+__version__ = '1.1.1'
