@@ -23,7 +23,7 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-  "torch >= 1.9.0"
+  "torch >= 1.1.0"
 ]
 keywords = ["differentiable", "discrete", "machine learning", "optimization"]
 
