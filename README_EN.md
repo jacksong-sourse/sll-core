@@ -105,6 +105,7 @@ y = sll.sign(x, eps=1e-3)
 y.backward()
 print(x.grad)  # tensor([500.])
 ```
+### **Note**: Sll-Core can be applied in code where almost all discrete operations are 'small and local', while the overall framework is still based on gradient descent. So far, only three have been demonstrated.
 
 ***
 
@@ -524,8 +525,8 @@ If you use SLL in your research, please cite:
 ```bibtex
 @software{sll-core,
   title = {SLL-Core: Static Local Linearization for Differentiable Discrete Programming},
-  author = {Jackson Guo},
-  year = {2024},
+  author = {Jacksong},
+  year = {2026},
   url = {https://github.com/jacksong-sourse/sll-core},
 }
 ```
