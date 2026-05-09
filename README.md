@@ -292,7 +292,7 @@ print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])  # 只有边界处有梯度
 
 ### 🎨 梯度分布对比
 
-![Gradient Distribution](demo_results/gradient_comparison.png)
+![Gradient Distribution](gradient_comparison.png)
 
 **实际测试结果**：
 
