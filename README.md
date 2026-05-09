@@ -14,9 +14,9 @@
 </p>
 
 @software{sll_core_2026,
-  author = 宋梓铭 Jacksong,
+  author = {{宋梓铭 (Jacksong)}},
   title = {SLL-Core: Static Local Linearization for Differentiable Discrete Programming},
-  url = {(https://github.com/jacksong-sourse/sll-core)},
+  url = {https://github.com/jacksong-sourse/sll-core},
   year = {2026}
 }
 
