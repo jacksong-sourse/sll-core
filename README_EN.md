@@ -15,37 +15,6 @@
 
 </div>
 
-***
-
-### 🎯 Core Advantage Demonstration
-
-```python
-import torch
-import sll
-
-# Compare gradient behavior of STE vs SLL
-x = torch.tensor([0.001, 0.5, 0.999], requires_grad=True)
-
-# STE (gradient fixed at 1 everywhere)
-with torch.no_grad():
-    y_ste = torch.round(x)
-y_ste.backward(torch.ones_like(y_ste), retain_graph=True)
-print("STE gradient:", x.grad)  # tensor([1., 1., 1.])
-
-# SLL (gradient intelligently concentrated near boundaries)
-x.grad.zero_()
-@sll.linearize(eps=0.1)
-def sll_round(x):
-    return torch.round(x)
-
-y_sll = sll_round(x)
-y_sll.backward(torch.ones_like(y_sll))
-print("SLL gradient:", x.grad)  # tensor([0., 5., 0.])  # Only boundary has gradient!
-```
-
-**Conclusion**: SLL maintains exact forward accuracy while intelligently concentrating gradients in boundary regions where optimization is actually needed, achieving more efficient training.
-
-***
 
 ## 🎯 Introduction
 
@@ -213,6 +182,8 @@ def discrete_controller(state):
 
 ***
 
+***
+
 ## 💥Demo: QAT Quantization-Aware Training
 
 ### 🚀 Zero-Invasion Differentiable Quantization Training
@@ -287,9 +258,47 @@ On MNIST quantization-aware training task:
 - **STE**: 94.2% accuracy, not fully converged after 100 epochs
 - **Sigmoid**: 95.1% accuracy, requires careful tuning
 
-### 📈 Training Loss Comparison（Demo）
+### 📈 Training Loss Comparison
 
 ![Training Loss Comparison](loss_comparison.png)
+
+### 🎯 Core Advantage Demonstration
+
+```python
+import torch
+import sll
+
+# Compare gradient behavior of STE vs SLL
+x = torch.tensor([0.001, 0.5, 0.999], requires_grad=True)
+
+# STE (gradient fixed at 1 everywhere)
+with torch.no_grad():
+    y_ste = torch.round(x)
+y_ste.backward(torch.ones_like(y_ste), retain_graph=True)
+print("STE gradient:", x.grad)  # tensor([1., 1., 1.])
+
+# SLL (gradient intelligently concentrated near boundaries)
+x.grad.zero_()
+@sll.linearize(eps=0.1)
+def sll_round(x):
+    return torch.round(x)
+
+y_sll = sll_round(x)
+y_sll.backward(torch.ones_like(y_sll))
+print("SLL gradient:", x.grad)  # tensor([0., 5., 0.])  # Only boundary has gradient!
+```
+
+**Conclusion**: SLL maintains exact forward accuracy while intelligently concentrating gradients in boundary regions where optimization is actually needed, achieving more efficient training.
+
+### 🎨 Gradient Distribution Comparison
+
+![Gradient Distribution](gradient_comparison.png)
+
+**Actual Test Results**:
+- SLL gradients: `[25.0, 0.0, 25.0, 0.0, 25.0]` — Only at boundaries
+- STE gradients: `[1.0, 1.0, 1.0, 1.0, 1.0]` — Everywhere, inefficient
+
+---
 
 
 ## 🏛️ Project Structure
