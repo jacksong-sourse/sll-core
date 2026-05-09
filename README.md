@@ -231,8 +231,8 @@ pytest tests/ -v
 ```bibtex
 @software{sll-core,
   title = {SLL-Core: Static Local Linearization for Differentiable Discrete Programming},
-  author = {Jackson Guo},
-  year = {2024},
+  author = {Jacksong},
+  year = {2026},
   url = {https://github.com/jacksong-sourse/sll-core},
 }
 ```
