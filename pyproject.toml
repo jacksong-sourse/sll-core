@@ -1,40 +1,37 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "sll-core"
-version = "0.1.8"
-description = "Static Local Linearization (SLL): zero-intrusive auto-differentiation for discrete programs"
+version = "0.1.9"
+description = "Static Local Linearization for Differentiable Discrete Programming"
 readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.8"
 authors = [
-    {name = "SLL Team", email = "15011462616@163.com"}
+  { name = "jacksong", email = "15011462616@163.com" }
 ]
-keywords = ["autograd", "differentiable", "discrete", "optimization", "pytorch"]
+license = "MIT"
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+requires-python = ">=3.8"
 dependencies = [
-    "torch>=1.9.0",
-    "numpy>=1.20.0",
+  "torch >= 1.9.0"
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "black>=22.0",
-]
+keywords = ["differentiable", "discrete", "machine learning", "optimization"]
 
 [project.urls]
-Homepage = "https://github.com/jacksong-sourse/sll-core"
-Repository = "https://github.com/jacksong-sourse/sll-core"
-Issues = "https://github.com/jacksong-sourse/sll-core/issues"
+"Homepage" = "https://github.com/jacksong-sourse/sll-core"
+"Repository" = "https://github.com/jacksong-sourse/sll-core"
 
-[tool.hatch.build.targets.wheel]
-packages = ["sll"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
