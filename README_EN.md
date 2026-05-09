@@ -2,7 +2,7 @@
 
 # 🔷 SLL-Core: Static Local Linearization
 
-**离散程序的零侵入可微分化引擎**
+**Zero-Invasion Differentiable Engine for Discrete Programs**
 
 [![PyPI Version](https://img.shields.io/pypi/v/sll-core.svg)](https://pypi.org/project/sll-core/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/sll-core.svg)](https://pypi.org/project/sll-core/)
@@ -16,29 +16,29 @@
 </div>
 
 
-## 🎯 项目简介
+## 🎯 Introduction
 
-SLL-Core 是一个基于 **静态局部线性化（Static Local Linearization）** 原理的 PyTorch 库，为离散操作提供**零侵入式**的自动微分能力。
+SLL-Core is a PyTorch library based on **Static Local Linearization** principle, providing **zero-invasion** automatic differentiation for discrete operations.
 
-**核心优势**：
+**Key Advantages**:
 
-- ✅ **零代码改动**：直接装饰现有代码，无需修改模型结构
-- ✅ **部署零开销**：训练时可微，部署时自动恢复硬逻辑
-- ✅ **稳定收敛**：常数梯度设计，无梯度消失/爆炸问题
-- ✅ **数学保证**：当 ε→0 时，最优解收敛到原始离散问题
+- ✅ **Zero Code Changes**: Decorate existing code directly, no model structure modification required
+- ✅ **Zero Deployment Overhead**: Differentiable during training, automatically restores hard logic during deployment
+- ✅ **Stable Convergence**: Constant gradient design, no vanishing/exploding gradient issues
+- ✅ **Mathematical Guarantee**: As ε→0, the optimal solution converges to the original discrete problem
 
 ***
 
-## ⚡ 快速开始
+## ⚡ Quick Start
 
 ```python
 import torch
 import sll
 
-# 使用装饰器让离散操作可微
+# Decorate to make discrete operations differentiable
 @ sll.linearize(eps=1e-2)
 def my_discrete_function(x):
-    y = torch.sign(x)      # 自动可微！
+    y = torch.sign(x)      # Automatically differentiable!
     z = torch.round(y * 10)
     return z.sum()
 
@@ -46,24 +46,24 @@ x = torch.tensor([-1.0, 0.0, 1.0], requires_grad=True)
 loss = my_discrete_function(x)
 loss.backward()
 
-print(x.grad)  # ✅ 梯度正常回传
+print(x.grad)  # ✅ Gradient flows normally
 ```
 
 ***
 
-## 🚀 安装
+## 🚀 Installation
 
 ```bash
 pip install sll-core
 ```
 
-**要求**: Python ≥ 3.8，PyTorch ≥ 1.9.0
+**Requirements**: Python ≥ 3.8, PyTorch ≥ 1.9.0
 
 ***
 
-## 📖 使用方式
+## 📖 Usage
 
-### 方式一：装饰器（推荐）
+### Method 1: Decorator (Recommended)
 
 ```python
 import torch
@@ -71,8 +71,8 @@ import sll
 
 @ sll.linearize(eps=1e-3)
 def custom_algorithm(x):
-    mask = (x > 0.5).float()   # 自动发现并软化
-    y = torch.sign(x)           # 自动发现并软化
+    mask = (x > 0.5).float()   # Auto-discovered and softened
+    y = torch.sign(x)           # Auto-discovered and softened
     return mask * y
 
 x = torch.tensor([-0.5, 0.5], requires_grad=True)
@@ -80,7 +80,7 @@ y = custom_algorithm(x)
 y.sum().backward()
 ```
 
-### 方式二：上下文管理器
+### Method 2: Context Manager
 
 ```python
 import torch
@@ -92,10 +92,10 @@ with sll.linearize(eps=1e-3):
     y = torch.round(x)
     y.backward(torch.ones_like(y))
 
-print(x.grad)  # ✅ 梯度正常回传
+print(x.grad)  # ✅ Gradient flows normally
 ```
 
-### 方式三：手动算子
+### Method 3: Manual Operators
 
 ```python
 from sll.ops import heaviside, sign, round, floor, ceil
@@ -108,22 +108,22 @@ print(x.grad)  # tensor([500.])
 
 ***
 
-## 🔧 支持的算子
+## 🔧 Supported Operators
 
-| 算子          | 描述             | 使用示例                              |
-| ----------- | -------------- | --------------------------------- |
-| `heaviside` | Heaviside 阶跃函数 | `sll.heaviside(x)`                |
-| `sign`      | 符号函数           | `sll.sign(x)`                     |
-| `round`     | 四舍五入           | `sll.round(x)`                    |
-| `floor`     | 向下取整           | `sll.floor(x)`                    |
-| `ceil`      | 向上取整           | `sll.ceil(x)`                     |
-| `threshold` | 通用阈值函数         | `sll.threshold(x, threshold=0.5)` |
+| Operator    | Description                | Usage Example                     |
+| ----------- | -------------------------- | --------------------------------- |
+| `heaviside` | Heaviside step function    | `sll.heaviside(x)`                |
+| `sign`      | Sign function              | `sll.sign(x)`                     |
+| `round`     | Round to nearest integer   | `sll.round(x)`                    |
+| `floor`     | Floor function             | `sll.floor(x)`                    |
+| `ceil`      | Ceiling function           | `sll.ceil(x)`                     |
+| `threshold` | General threshold function | `sll.threshold(x, threshold=0.5)` |
 
 ***
 
-## 🔬 应用场景
+## 🔬 Applications
 
-### 场景 1：量化感知训练 (QAT)
+### Application 1: Quantization-Aware Training (QAT)
 
 ```python
 @ sll.linearize(eps=1e-3)
@@ -132,7 +132,7 @@ def quantize(x, levels=256):
     return torch.round((x - x.min()) * scale) / scale + x.min()
 ```
 
-### 场景 2：组合优化
+### Application 2: Combinatorial Optimization
 
 ```python
 @ sll.linearize(eps=1e-2)
@@ -144,56 +144,56 @@ def knapsack(probabilities):
     return total_value - penalty
 ```
 
-### 场景 3：离散控制策略
+### Application 3: Discrete Control Policy
 
 ```python
 @ sll.linearize(eps=1e-3)
 def discrete_controller(state):
     action_prob = torch.sigmoid(state)
-    action = (action_prob > 0.5).float()  # 离散决策
+    action = (action_prob > 0.5).float()  # Discrete decision
     return action
 ```
 
 ***
 
-## ⚙️ 参数说明
+## ⚙️ Parameter Description
 
-| 参数    | 类型    | 默认值  | 说明      |
-| ----- | ----- | ---- | ------- |
-| `eps` | float | 1e-3 | 线性化区间半宽 |
+| Parameter | Type  | Default | Description                          |
+| --------- | ----- | ------- | ------------------------------------ |
+| `eps`     | float | 1e-3    | Half-width of linearization interval |
 
-**eps 参数的作用**：
+**How** **`eps`** **works**:
 
-- 输入距离硬边界 ≤ eps：使用线性化近似（有梯度）
-- 输入距离硬边界 > eps：使用原始硬逻辑（梯度为0）
-- eps 越小：越接近硬逻辑，梯度区域越窄
-- eps 越大：过渡越平滑，近似区域越宽
-
-***
-
-## 📊 梯度对比
-
-| 方法         | 前向输出   | 边界梯度       | 远离边界梯度 | 调参难度  |
-| ---------- | ------ | ---------- | ------ | ----- |
-| 硬函数        | 精确     | 0          | 0      | -     |
-| STE        | 精确     | 1          | 1      | -     |
-| Sigmoid 松弛 | 有误差    | 高斯峰        | 0      | 高     |
-| **SLL**    | **精确** | **1/(2ε)** | **0**  | **低** |
+- Input within `eps` of hard boundary: Use linearization approximation (has gradient)
+- Input beyond `eps` from hard boundary: Use original hard logic (gradient=0)
+- Smaller `eps`: Closer to hard logic, narrower gradient region
+- Larger `eps`: Smoother transition, wider approximation region
 
 ***
 
+## 📊 Gradient Comparison
+
+| Method             | Forward Output | Boundary Gradient | Far from Boundary | Tuning Difficulty |
+| ------------------ | -------------- | ----------------- | ----------------- | ----------------- |
+| Hard Function      | Exact          | 0                 | 0                 | -                 |
+| STE                | Exact          | 1                 | 1                 | -                 |
+| Sigmoid Relaxation | Approximate    | Gaussian peak     | 0                 | High              |
+| **SLL**            | **Exact**      | **1/(2ε)**        | **0**             | **Low**           |
+
 ***
 
-## 💥 Demo：QAT 量化感知训练
+***
 
-### 🚀 零侵入式可微量化训练
+## 💥Demo: QAT Quantization-Aware Training
+
+### 🚀 Zero-Invasion Differentiable Quantization Training
 
 ```python
 import torch
 import torch.nn as nn
 import sll
 
-# 定义一个简单的神经网络
+# Define a simple neural network
 class SimpleNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -201,10 +201,10 @@ class SimpleNet(nn.Module):
         self.fc2 = nn.Linear(64, 32)
         self.fc3 = nn.Linear(32, 10)
     
-    # 使用 SLL 装饰器实现零侵入式可微量化
+    # Use SLL decorator for zero-invasion differentiable quantization
     @sll.linearize(eps=1e-3)
     def quantize(self, x, levels=256):
-        """将张量量化到指定级别（可微！）"""
+        """Quantize tensor to specified levels (differentiable!)"""
         scale = (levels - 1) / (x.max() - x.min() + 1e-10)
         quantized = torch.round((x - x.min()) * scale) / scale + x.min()
         return quantized
@@ -212,72 +212,72 @@ class SimpleNet(nn.Module):
     def forward(self, x):
         x = self.fc1(x)
         x = torch.relu(x)
-        x = self.quantize(x)  # 可微量化！
+        x = self.quantize(x)  # Differentiable quantization!
         x = self.fc2(x)
         x = torch.relu(x)
-        x = self.quantize(x)  # 可微量化！
+        x = self.quantize(x)  # Differentiable quantization!
         x = self.fc3(x)
         return x
 
-# 训练配置
+# Training configuration
 model = SimpleNet()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 criterion = nn.CrossEntropyLoss()
 
-# 训练循环
+# Training loop
 for epoch in range(100):
-    # 生成模拟数据
+    # Generate synthetic data
     x = torch.randn(32, 10)
     y = torch.randint(0, 10, (32,))
     
     optimizer.zero_grad()
     output = model(x)
     loss = criterion(output, y)
-    loss.backward()  # ✅ 梯度正常回传！
+    loss.backward()  # ✅ Gradient flows normally!
     optimizer.step()
     
     if (epoch + 1) % 20 == 0:
         print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
 ```
 
-### 📊 对比实验：SLL vs STE vs Sigmoid 松弛
+### 📊 Comparison: SLL vs STE vs Sigmoid Relaxation
 
-| 指标        | STE | Sigmoid 松弛 | **SLL** |
-| --------- | --- | ---------- | ------- |
-| **前向精度**  | 精确  | 有误差        | **精确**  |
-| **收敛速度**  | 慢   | 中等         | **最快**  |
-| **梯度消失**  | 常见  | 偶发         | **无**   |
-| **调参难度**  | -   | 高          | **低**   |
-| **训练稳定性** | 差   | 中等         | **优秀**  |
+| Metric                 | STE    | Sigmoid Relaxation | **SLL**       |
+| ---------------------- | ------ | ------------------ | ------------- |
+| **Forward Accuracy**   | Exact  | Approximate        | **Exact**     |
+| **Convergence Speed**  | Slow   | Medium             | **Fastest**   |
+| **Vanishing Gradient** | Common | Occasional         | **None**      |
+| **Tuning Difficulty**  | -      | High               | **Low**       |
+| **Training Stability** | Poor   | Medium             | **Excellent** |
 
-### ⚡ 性能数据
+### ⚡ Performance Data
 
-在 MNIST 量化感知训练任务上：
+On MNIST quantization-aware training task:
 
-- **SLL**: 准确率 97.8%，训练 50 epoch 收敛
-- **STE**: 准确率 94.2%，训练 100 epoch 未完全收敛
-- **Sigmoid**: 准确率 95.1%，需精心调参
+- **SLL**: 97.8% accuracy, converges in 50 epochs
+- **STE**: 94.2% accuracy, not fully converged after 100 epochs
+- **Sigmoid**: 95.1% accuracy, requires careful tuning
 
-### 📈 训练损失对比（Demo训练损失）
+### 📈 Training Loss Comparison
 
 ![Training Loss Comparison](loss_comparison.png)
 
-### 🎯 核心优势展示
+### 🎯 Core Advantage Demonstration
 
 ```python
 import torch
 import sll
 
-# 对比 STE 和 SLL 的梯度行为
+# Compare gradient behavior of STE vs SLL
 x = torch.tensor([0.001, 0.5, 0.999], requires_grad=True)
 
-# STE (梯度在边界处固定为1)
+# STE (gradient fixed at 1 everywhere)
 with torch.no_grad():
     y_ste = torch.round(x)
 y_ste.backward(torch.ones_like(y_ste), retain_graph=True)
-print("STE 梯度:", x.grad)  # tensor([1., 1., 1.])
+print("STE gradient:", x.grad)  # tensor([1., 1., 1.])
 
-# SLL (梯度智能集中在边界附近)
+# SLL (gradient intelligently concentrated near boundaries)
 x.grad.zero_()
 @sll.linearize(eps=0.1)
 def sll_round(x):
@@ -285,28 +285,27 @@ def sll_round(x):
 
 y_sll = sll_round(x)
 y_sll.backward(torch.ones_like(y_sll))
-print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])  # 只有边界处有梯度！
+print("SLL gradient:", x.grad)  # tensor([0., 5., 0.])  # Only boundary has gradient!
 ```
 
-**结论**：SLL 在保持前向精度的同时，智能地将梯度集中在真正需要优化的边界区域，实现更高效的训练。
+**Conclusion**: SLL maintains exact forward accuracy while intelligently concentrating gradients in boundary regions where optimization is actually needed, achieving more efficient training.
 
-### 🎨 梯度分布对比
+### 🎨 Gradient Distribution Comparison
 
 ![Gradient Distribution](gradient_comparison.png)
 
-**实际测试结果**：
+**Actual Test Results**:
+- SLL gradients: `[25.0, 0.0, 25.0, 0.0, 25.0]` — Only at boundaries
+- STE gradients: `[1.0, 1.0, 1.0, 1.0, 1.0]` — Everywhere, inefficient
 
-- SLL 梯度: `[25.0, 0.0, 25.0, 0.0, 25.0]` — 仅在边界处有梯度
-- STE 梯度: `[1.0, 1.0, 1.0, 1.0, 1.0]` — 处处有梯度，效率低下
-
-***
+---
 
 
-## 🧪 更多测试用例
+## 🧪 More Test Cases
 
-### 测试用例 1：基础算子梯度验证
+### Test Case 1: Basic Operator Gradient Verification
 
-验证所有核心算子在硬边界处产生正确的梯度。
+Verify that all core operators produce correct gradients at hard boundaries.
 
 ```python
 import torch
@@ -321,13 +320,13 @@ with sll.linearize(eps=1e-2):
          + torch.ceil(x))
     y.sum().backward()
 
-print("梯度:", x.grad)
-# 预期：在边界点 (0.0, 0.5) 附近出现非零梯度
+print("Gradient:", x.grad)
+# Expected: Non-zero gradients at boundary points (0.0, 0.5)
 ```
 
-### 测试用例 2：EPS 参数敏感性测试
+### Test Case 2: EPS Parameter Sensitivity
 
-展示 `eps` 如何控制边界附近的梯度大小。
+Demonstrate how `eps` controls gradient magnitude near boundaries.
 
 ```python
 import torch
@@ -340,12 +339,12 @@ for eps in [1e-1, 1e-2, 1e-3]:
     y = sll.sign(x, eps=eps)
     y.backward()
     print(f"eps={eps}, grad={x.grad.item():.1f}")
-# 预期：梯度 ≈ 1/(2*eps)。eps 越小，梯度越大。
+# Expected: Gradient ≈ 1/(2*eps). Smaller eps → larger gradient.
 ```
 
-### 测试用例 3：复合离散函数测试
+### Test Case 3: Composite Discrete Function
 
-测试多个离散操作嵌套时，在硬边界交叉处的梯度行为。
+Test nested discrete operations where multiple hard boundaries intersect.
 
 ```python
 import torch
@@ -353,21 +352,21 @@ import sll
 
 @sll.linearize(eps=1e-2)
 def complex_logic(x):
-    mask = (x > 0.0).float()          # 阶跃
-    sign_x = torch.sign(x)            # 符号
-    quantized = torch.round(x * 10)   # 取整
+    mask = (x > 0.0).float()          # heaviside
+    sign_x = torch.sign(x)            # sign
+    quantized = torch.round(x * 10)  # round
     return mask * sign_x + quantized
 
 x = torch.tensor([-0.05, 0.0, 0.05], requires_grad=True)
 loss = complex_logic(x).sum()
 loss.backward()
-print("边界处梯度:", x.grad)
-# 预期：在多个离散操作交汇的边界处出现非零梯度
+print("Gradient at boundaries:", x.grad)
+# Expected: Non-zero gradients where multiple discrete ops intersect
 ```
 
-### 测试用例 4：计算几何 — 点到线段距离
+### Test Case 4: Computational Geometry — Point-to-Segment Distance
 
-经典的"硬"几何难题：最近点会在投影点和端点之间跳变。SLL 让这种跳变可微。
+A classic "hard" geometry problem: the nearest point jumps between projection and endpoints. SLL makes the jump differentiable.
 
 ```python
 import torch
@@ -379,16 +378,16 @@ def point_to_segment_distance(p, a, b):
     ap = p - a
     t = (ap @ ab) / (ab @ ab + 1e-10)
 
-    # 离散判断：投影是否落在线段之外
+    # Discrete: does projection fall outside the segment?
     left = (t < 0.0).float()
     right = (t > 1.0).float()
 
-    # 连续的 clamp（始终可微）
+    # Continuous clamp (always differentiable)
     t_clamped = torch.clamp(t, 0.0, 1.0)
     closest = a + t_clamped * ab
     dist = torch.norm(p - closest)
 
-    # 通过 SLL 实现可微的端点选择惩罚
+    # Differentiable endpoint selection penalty via SLL
     endpoint_dist = left * torch.norm(p - a) + right * torch.norm(p - b)
     return dist + (left + right) * endpoint_dist * 0.1
 
@@ -398,13 +397,13 @@ b = torch.tensor([1.0, 0.0])
 
 d = point_to_segment_distance(p, a, b)
 d.backward()
-print(f"距离={d.item():.4f}, 梯度={p.grad}")
-# 预期：即使投影靠近端点，梯度仍能正常回传
+print(f"Distance={d.item():.4f}, Gradient={p.grad}")
+# Expected: Gradient flows even when projecting near endpoints
 ```
 
-### 测试用例 5：端到端可微背包问题
+### Test Case 5: End-to-End Differentiable Knapsack
 
-完整的组合优化循环，其中选择决策是离散的。
+A full combinatorial optimization loop where selection decisions are discrete.
 
 ```python
 import torch
@@ -418,7 +417,7 @@ def knapsack_loss(logits, weights, values, capacity):
     total_weight = (selected * weights).sum()
     total_value = (selected * values).sum()
 
-    # 将硬约束软化成可微的惩罚项
+    # Hard constraint softened into differentiable penalty
     penalty = torch.relu(total_weight - capacity) ** 2 * 100
     return -total_value + penalty
 
@@ -436,14 +435,14 @@ for step in range(200):
     optimizer.step()
 
 probs = torch.sigmoid(logits)
-print("最终选择概率:", probs.detach())
-print("最终损失:", loss.item())
-# 预期：概率收敛到满足约束的高价值物品组合
+print("Final selection probabilities:", probs.detach())
+print("Final loss:", loss.item())
+# Expected: Probabilities converge toward valid high-value selections
 ```
 
-### 测试用例 6：训练稳定性 — 梯度流保障
+### Test Case 6: Training Stability — Gradient Flow Guarantee
 
-在小型训练场景中对比硬离散函数与 SLL 的梯度行为。
+Compare gradient behavior between hard discrete functions and SLL in a toy training loop.
 
 ```python
 import torch
@@ -452,14 +451,14 @@ import sll
 torch.manual_seed(42)
 x = torch.linspace(-1, 1, 5, requires_grad=True)
 
-# 硬 sign：所有位置梯度为零（训练冻结）
+# Hard sign: zero gradients everywhere (training freezes)
 y_hard = torch.sign(x)
 y_hard.sum().backward()
 grad_hard = x.grad.clone()
 
 x.grad = None
 
-# SLL sign：梯度集中在边界处（训练正常进行）
+# SLL sign: gradients concentrated at boundaries (training proceeds)
 @sll.linearize(eps=0.2)
 def stable_sign(x):
     return torch.sign(x)
@@ -468,22 +467,22 @@ y_sll = stable_sign(x)
 y_sll.sum().backward()
 grad_sll = x.grad
 
-print("硬梯度: ", grad_hard)
-print("SLL 梯度:", grad_sll)
-# 预期：Hard=[0,0,0,0,0]（死亡）；SLL=[0, 2.5, 0, 2.5, 0]（存活）
+print("Hard gradient: ", grad_hard)
+print("SLL gradient:  ", grad_sll)
+# Expected: Hard=[0,0,0,0,0] (dead); SLL=[0, 2.5, 0, 2.5, 0] (alive)
 ```
 
 ***
 
-## 🏛️ 项目结构
+## 🏛️ Project Structure
 
 ```
 sll-core/
 ├── sll/
-│   ├── __init__.py          # 模块导出
-│   ├── core.py              # 核心 API（linearize）
-│   ├── discovery.py         # 自动发现装饰器
-│   └── ops.py               # SLL 算子实现
+│   ├── __init__.py          # Module exports
+│   ├── core.py              # Core API (linearize)
+│   ├── discovery.py         # Auto-discovery decorator
+│   └── ops.py               # SLL operator implementations
 ├── README.md
 ├── README_EN.md
 ├── LICENSE
@@ -492,17 +491,17 @@ sll-core/
 
 ***
 
-## 📄 许可证
+## 📄 License
 
-MIT License - 详见 [LICENSE](LICENSE)
+MIT License - See [LICENSE](LICENSE) for details
 
 ***
 
-## 🤝 贡献指南
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Welcome to submit Issues and Pull Requests!
 
-### 开发环境
+### Development Environment
 
 ```bash
 git clone https://github.com/jacksong-sourse/sll-core.git
@@ -510,7 +509,7 @@ cd sll-core
 pip install -e .[dev]
 ```
 
-### 运行测试
+### Running Tests
 
 ```bash
 pytest tests/ -v
@@ -518,9 +517,9 @@ pytest tests/ -v
 
 ***
 
-## 📚 引用
+## 📚 Citation
 
-如果您在研究中使用 SLL，请引用：
+If you use SLL in your research, please cite:
 
 ```bibtex
 @software{sll-core,
@@ -533,4 +532,4 @@ pytest tests/ -v
 
 ***
 
-**⭐ 如果这个项目对您有帮助，请给个 Star！**
+**⭐ If this project helps you, please give it a Star!**
