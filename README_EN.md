@@ -17,84 +17,6 @@
 
 ***
 
-## 💥Demo: QAT Quantization-Aware Training
-
-### 🚀 Zero-Invasion Differentiable Quantization Training
-
-```python
-import torch
-import torch.nn as nn
-import sll
-
-# Define a simple neural network
-class SimpleNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(10, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 10)
-    
-    # Use SLL decorator for zero-invasion differentiable quantization
-    @sll.linearize(eps=1e-3)
-    def quantize(self, x, levels=256):
-        """Quantize tensor to specified levels (differentiable!)"""
-        scale = (levels - 1) / (x.max() - x.min() + 1e-10)
-        quantized = torch.round((x - x.min()) * scale) / scale + x.min()
-        return quantized
-    
-    def forward(self, x):
-        x = self.fc1(x)
-        x = torch.relu(x)
-        x = self.quantize(x)  # Differentiable quantization!
-        x = self.fc2(x)
-        x = torch.relu(x)
-        x = self.quantize(x)  # Differentiable quantization!
-        x = self.fc3(x)
-        return x
-
-# Training configuration
-model = SimpleNet()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-criterion = nn.CrossEntropyLoss()
-
-# Training loop
-for epoch in range(100):
-    # Generate synthetic data
-    x = torch.randn(32, 10)
-    y = torch.randint(0, 10, (32,))
-    
-    optimizer.zero_grad()
-    output = model(x)
-    loss = criterion(output, y)
-    loss.backward()  # ✅ Gradient flows normally!
-    optimizer.step()
-    
-    if (epoch + 1) % 20 == 0:
-        print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
-```
-
-### 📊 Comparison: SLL vs STE vs Sigmoid Relaxation
-
-| Metric                 | STE    | Sigmoid Relaxation | **SLL**       |
-| ---------------------- | ------ | ------------------ | ------------- |
-| **Forward Accuracy**   | Exact  | Approximate        | **Exact**     |
-| **Convergence Speed**  | Slow   | Medium             | **Fastest**   |
-| **Vanishing Gradient** | Common | Occasional         | **None**      |
-| **Tuning Difficulty**  | -      | High               | **Low**       |
-| **Training Stability** | Poor   | Medium             | **Excellent** |
-
-### ⚡ Performance Data
-
-On MNIST quantization-aware training task:
-
-- **SLL**: 97.8% accuracy, converges in 50 epochs
-- **STE**: 94.2% accuracy, not fully converged after 100 epochs
-- **Sigmoid**: 95.1% accuracy, requires careful tuning
-
-### 📈 Training Loss Comparison（Demo）
-
-![Training Loss Comparison](demo_results/loss_comparison.png)
-
 ### 🎯 Core Advantage Demonstration
 
 ```python
@@ -290,6 +212,85 @@ def discrete_controller(state):
 | **SLL**            | **Exact**      | **1/(2ε)**        | **0**             | **Low**           |
 
 ***
+
+## 💥Demo: QAT Quantization-Aware Training
+
+### 🚀 Zero-Invasion Differentiable Quantization Training
+
+```python
+import torch
+import torch.nn as nn
+import sll
+
+# Define a simple neural network
+class SimpleNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(10, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 10)
+    
+    # Use SLL decorator for zero-invasion differentiable quantization
+    @sll.linearize(eps=1e-3)
+    def quantize(self, x, levels=256):
+        """Quantize tensor to specified levels (differentiable!)"""
+        scale = (levels - 1) / (x.max() - x.min() + 1e-10)
+        quantized = torch.round((x - x.min()) * scale) / scale + x.min()
+        return quantized
+    
+    def forward(self, x):
+        x = self.fc1(x)
+        x = torch.relu(x)
+        x = self.quantize(x)  # Differentiable quantization!
+        x = self.fc2(x)
+        x = torch.relu(x)
+        x = self.quantize(x)  # Differentiable quantization!
+        x = self.fc3(x)
+        return x
+
+# Training configuration
+model = SimpleNet()
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+criterion = nn.CrossEntropyLoss()
+
+# Training loop
+for epoch in range(100):
+    # Generate synthetic data
+    x = torch.randn(32, 10)
+    y = torch.randint(0, 10, (32,))
+    
+    optimizer.zero_grad()
+    output = model(x)
+    loss = criterion(output, y)
+    loss.backward()  # ✅ Gradient flows normally!
+    optimizer.step()
+    
+    if (epoch + 1) % 20 == 0:
+        print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+```
+
+### 📊 Comparison: SLL vs STE vs Sigmoid Relaxation
+
+| Metric                 | STE    | Sigmoid Relaxation | **SLL**       |
+| ---------------------- | ------ | ------------------ | ------------- |
+| **Forward Accuracy**   | Exact  | Approximate        | **Exact**     |
+| **Convergence Speed**  | Slow   | Medium             | **Fastest**   |
+| **Vanishing Gradient** | Common | Occasional         | **None**      |
+| **Tuning Difficulty**  | -      | High               | **Low**       |
+| **Training Stability** | Poor   | Medium             | **Excellent** |
+
+### ⚡ Performance Data
+
+On MNIST quantization-aware training task:
+
+- **SLL**: 97.8% accuracy, converges in 50 epochs
+- **STE**: 94.2% accuracy, not fully converged after 100 epochs
+- **Sigmoid**: 95.1% accuracy, requires careful tuning
+
+### 📈 Training Loss Comparison（Demo）
+
+![Training Loss Comparison](loss_comparison.png)
+
 
 ## 🏛️ Project Structure
 
