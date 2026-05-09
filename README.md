@@ -260,7 +260,7 @@ for epoch in range(100):
 
 ### 📈 训练损失对比（Demo训练损失）
 
-![Training Loss Comparison](demo_results/loss_comparison.png)
+![Training Loss Comparison](loss_comparison.png)
 
 ### 🎯 核心优势展示
 
