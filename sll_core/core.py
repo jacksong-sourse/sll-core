@@ -90,7 +90,7 @@ class SLLWrapperFunction(torch.autograd.Function):
     def forward(ctx, func, eps, *args):
         ctx.func = func
         ctx.eps = eps
-        ctx.args = args  # 保存原始参数，用于backward时确定梯度数量
+        ctx.args = args
         
         tensor_args = []
         for arg in args:
@@ -106,6 +106,30 @@ class SLLWrapperFunction(torch.autograd.Function):
             result = result.detach().clone()
         
         ctx.result = result
+        
+        with torch.no_grad():
+            args_plus = list(args)
+            args_minus = list(args)
+            for i, arg in enumerate(args_plus):
+                if isinstance(arg, torch.Tensor):
+                    args_plus[i] = arg.detach().clone() + eps
+            for i, arg in enumerate(args_minus):
+                if isinstance(arg, torch.Tensor):
+                    args_minus[i] = arg.detach().clone() - eps
+            
+            try:
+                result_plus = func(*args_plus)
+                result_minus = func(*args_minus)
+                if isinstance(result_plus, torch.Tensor) and isinstance(result_minus, torch.Tensor):
+                    ctx.result_plus = result_plus.detach().clone()
+                    ctx.result_minus = result_minus.detach().clone()
+                else:
+                    ctx.result_plus = None
+                    ctx.result_minus = None
+            except Exception:
+                ctx.result_plus = None
+                ctx.result_minus = None
+        
         return result
 
     @staticmethod
@@ -123,20 +147,22 @@ class SLLWrapperFunction(torch.autograd.Function):
                 tensor_idx += 1
                 
                 if tensor.requires_grad:
-                    fractional_part = torch.abs(tensor - torch.round(tensor))
-                    near_integer_boundary = (fractional_part < eps) | ((1 - fractional_part) < eps)
-                    near_midpoint = torch.abs(fractional_part - 0.5) < eps
-                    near_boundary = near_integer_boundary | near_midpoint
-                    
                     grad_result = torch.zeros_like(tensor)
-                    grad_result[near_boundary] = grad_output.sum() / (2 * eps)
-                    grad_result[~near_boundary] = 0
+                    near_boundary = torch.zeros_like(tensor, dtype=torch.bool)
+                    
+                    if ctx.result_plus is not None and ctx.result_minus is not None:
+                        diff = torch.abs(ctx.result_plus - ctx.result_minus)
+                        near_boundary = diff > eps
+                    else:
+                        near_boundary = torch.ones_like(tensor, dtype=torch.bool)
+                    
+                    if near_boundary.any():
+                        grad_result[near_boundary] = grad_output[near_boundary] / (2 * eps)
                     
                     result_grads.append(grad_result)
                 else:
                     result_grads.append(None)
             else:
-                # 非张量参数返回None
                 result_grads.append(None)
         
         return (None, None) + tuple(result_grads)
