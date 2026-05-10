@@ -152,20 +152,9 @@ class SLLWrapperFunction(torch.autograd.Function):
                     
                     if ctx.result_plus is not None and ctx.result_minus is not None:
                         diff = torch.abs(ctx.result_plus - ctx.result_minus)
-                        dynamic_boundary = diff > eps
-                        
-                        if dynamic_boundary.any():
-                            near_boundary = dynamic_boundary
-                        else:
-                            fractional_part = torch.abs(tensor - torch.round(tensor))
-                            near_integer_boundary = (fractional_part < eps) | ((1 - fractional_part) < eps)
-                            near_midpoint = torch.abs(fractional_part - 0.5) < eps
-                            near_boundary = near_integer_boundary | near_midpoint
+                        near_boundary = diff > eps
                     else:
-                        fractional_part = torch.abs(tensor - torch.round(tensor))
-                        near_integer_boundary = (fractional_part < eps) | ((1 - fractional_part) < eps)
-                        near_midpoint = torch.abs(fractional_part - 0.5) < eps
-                        near_boundary = near_integer_boundary | near_midpoint
+                        near_boundary = torch.ones_like(tensor, dtype=torch.bool)
                     
                     if near_boundary.any():
                         grad_result[near_boundary] = grad_output[near_boundary] / (2 * eps)
