@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sll-core"
-version = "1.1.5"
+version = "1.1.6"
 description = "Static Local Linearization for Differentiable Discrete Programming"
 readme = "README.md"
 authors = [
