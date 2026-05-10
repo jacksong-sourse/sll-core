@@ -33,12 +33,11 @@ SLL-Core 是一个基于 **静态局部线性化（Static Local Linearization）
 
 ```python
 import torch
-import sll
+import sll_core
 
-# 使用装饰器让离散操作可微
-@ sll.linearize(eps=1e-2)
+@ sll_core.linearize(eps=1e-2)
 def my_discrete_function(x):
-    y = torch.sign(x)      # 自动可微！
+    y = torch.sign(x)      
     z = torch.round(y * 10)
     return z.sum()
 
@@ -46,7 +45,7 @@ x = torch.tensor([-1.0, 0.0, 1.0], requires_grad=True)
 loss = my_discrete_function(x)
 loss.backward()
 
-print(x.grad)  # ✅ 梯度正常回传
+print(x.grad)  
 ```
 
 ***
@@ -67,12 +66,12 @@ pip install sll-core
 
 ```python
 import torch
-import sll
+import sll_core
 
-@ sll.linearize(eps=1e-3)
+@ sll_core.linearize(eps=1e-3)
 def custom_algorithm(x):
-    mask = (x > 0.5).float()   # 自动发现并软化
-    y = torch.sign(x)           # 自动发现并软化
+    mask = (x > 0.5).float()   
+    y = torch.sign(x)           
     return mask * y
 
 x = torch.tensor([-0.5, 0.5], requires_grad=True)
@@ -84,24 +83,24 @@ y.sum().backward()
 
 ```python
 import torch
-import sll
+import sll_core
 
 x = torch.tensor([1.2, 2.5], requires_grad=True)
 
-with sll.linearize(eps=1e-3):
+with sll_core.linearize(eps=1e-3):
     y = torch.round(x)
     y.backward(torch.ones_like(y))
 
-print(x.grad)  # ✅ 梯度正常回传
+print(x.grad)  
 ```
 
 ### 方式三：手动算子
 
 ```python
-from sll.ops import heaviside, sign, round, floor, ceil
+from sll_core.ops import heaviside, sign, round, floor, ceil
 
 x = torch.tensor([0.0], requires_grad=True)
-y = sll.sign(x, eps=1e-3)
+y = sll_core.sign(x, eps=1e-3)
 y.backward()
 print(x.grad)  # tensor([500.])
 ```
@@ -112,12 +111,12 @@ print(x.grad)  # tensor([500.])
 
 | 算子          | 描述             | 使用示例                              |
 | ----------- | -------------- | --------------------------------- |
-| `heaviside` | Heaviside 阶跃函数 | `sll.heaviside(x)`                |
-| `sign`      | 符号函数           | `sll.sign(x)`                     |
-| `round`     | 四舍五入           | `sll.round(x)`                    |
-| `floor`     | 向下取整           | `sll.floor(x)`                    |
-| `ceil`      | 向上取整           | `sll.ceil(x)`                     |
-| `threshold` | 通用阈值函数         | `sll.threshold(x, threshold=0.5)` |
+| `heaviside` | Heaviside 阶跃函数 | `sll_core.heaviside(x)`                |
+| `sign`      | 符号函数           | `sll_core.sign(x)`                     |
+| `round`     | 四舍五入           | `sll_core.round(x)`                    |
+| `floor`     | 向下取整           | `sll_core.floor(x)`                    |
+| `ceil`      | 向上取整           | `sll_core.ceil(x)`                     |
+| `threshold` | 通用阈值函数         | `sll_core.threshold(x, threshold=0.5)` |
 
 ***
 
@@ -126,7 +125,7 @@ print(x.grad)  # tensor([500.])
 ### 场景 1：量化感知训练 (QAT)
 
 ```python
-@ sll.linearize(eps=1e-3)
+@ sll_core.linearize(eps=1e-3)
 def quantize(x, levels=256):
     scale = (levels - 1) / (x.max() - x.min() + 1e-10)
     return torch.round((x - x.min()) * scale) / scale + x.min()
@@ -135,7 +134,7 @@ def quantize(x, levels=256):
 ### 场景 2：组合优化
 
 ```python
-@ sll.linearize(eps=1e-2)
+@ sll_core.linearize(eps=1e-2)
 def knapsack(probabilities):
     selected = (probabilities > 0.5).float()
     total_weight = (selected * weights).sum()
@@ -147,14 +146,69 @@ def knapsack(probabilities):
 ### 场景 3：离散控制策略
 
 ```python
-@ sll.linearize(eps=1e-3)
+@ sll_core.linearize(eps=1e-3)
 def discrete_controller(state):
     action_prob = torch.sigmoid(state)
     action = (action_prob > 0.5).float()  # 离散决策
     return action
 ```
 
-### **注意**：Sll-Core可应用在几乎所有离散操作是"少量、局部"的，整体框架还是基于梯度下降的代码里，目前仅仅展示了3个。
+### 场景 4：神经网络剪枝
+
+```python
+@ sll_core.linearize(eps=1e-3)
+def magnitude_pruning(weights, threshold=0.01):
+    mask = (torch.abs(weights) > threshold).float()
+    pruned_weights = weights * mask
+    return pruned_weights
+```
+
+### 场景 5：图像分割阈值处理
+
+```python
+@ sll_core.linearize(eps=1e-3)
+def binary_segmentation(logits, threshold=0.5):
+    prob = torch.sigmoid(logits)
+    mask = (prob > threshold).float()
+    return mask
+```
+
+### 场景 6：强化学习动作选择
+
+```python
+@ sll_core.linearize(eps=1e-2)
+def epsilon_greedy_action(q_values, epsilon=0.1):
+    best_action = torch.argmax(q_values, dim=-1)
+    random_action = torch.randint(0, q_values.shape[-1], best_action.shape)
+    use_random = (torch.rand_like(best_action.float()) < epsilon).float()
+    action = (1 - use_random) * best_action.float() + use_random * random_action.float()
+    return action.long()
+```
+
+### 场景 7：数据压缩量化
+
+```python
+@ sll_core.linearize(eps=1e-4)
+def ternary_quantization(x):
+    scale = torch.max(torch.abs(x))
+    normalized = x / (scale + 1e-10)
+    quantized = torch.sign(normalized) * (torch.abs(normalized) > 0.5).float()
+    return quantized * scale
+```
+
+### 场景 8：稀疏注意力机制
+
+```python
+@ sll_core.linearize(eps=1e-3)
+def sparse_attention(attention_scores, top_k=16):
+    top_vals, top_idx = torch.topk(attention_scores, top_k, dim=-1)
+    mask = torch.zeros_like(attention_scores)
+    mask.scatter_(-1, top_idx, 1.0)
+    sparse_scores = attention_scores * mask
+    return sparse_scores / (sparse_scores.sum(dim=-1, keepdim=True) + 1e-10)
+```
+
+### **注意**：Sll-Core可应用在几乎所有离散操作是"少量、局部"的，整体框架还是基于梯度下降的代码里。
 
 ***
 
@@ -193,9 +247,8 @@ def discrete_controller(state):
 ```python
 import torch
 import torch.nn as nn
-import sll
+import sll_core
 
-# 定义一个简单的神经网络
 class SimpleNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -203,10 +256,8 @@ class SimpleNet(nn.Module):
         self.fc2 = nn.Linear(64, 32)
         self.fc3 = nn.Linear(32, 10)
     
-    # 使用 SLL 装饰器实现零侵入式可微量化
-    @sll.linearize(eps=1e-3)
+    @sll_core.linearize(eps=1e-3)
     def quantize(self, x, levels=256):
-        """将张量量化到指定级别（可微！）"""
         scale = (levels - 1) / (x.max() - x.min() + 1e-10)
         quantized = torch.round((x - x.min()) * scale) / scale + x.min()
         return quantized
@@ -214,28 +265,25 @@ class SimpleNet(nn.Module):
     def forward(self, x):
         x = self.fc1(x)
         x = torch.relu(x)
-        x = self.quantize(x)  # 可微量化！
+        x = self.quantize(x)  
         x = self.fc2(x)
         x = torch.relu(x)
-        x = self.quantize(x)  # 可微量化！
+        x = self.quantize(x)  
         x = self.fc3(x)
         return x
 
-# 训练配置
 model = SimpleNet()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 criterion = nn.CrossEntropyLoss()
 
-# 训练循环
 for epoch in range(100):
-    # 生成模拟数据
     x = torch.randn(32, 10)
     y = torch.randint(0, 10, (32,))
     
     optimizer.zero_grad()
     output = model(x)
     loss = criterion(output, y)
-    loss.backward()  # ✅ 梯度正常回传！
+    loss.backward()  
     optimizer.step()
     
     if (epoch + 1) % 20 == 0:
@@ -268,26 +316,23 @@ for epoch in range(100):
 
 ```python
 import torch
-import sll
+import sll_core
 
-# 对比 STE 和 SLL 的梯度行为
 x = torch.tensor([0.001, 0.5, 0.999], requires_grad=True)
 
-# STE (梯度在边界处固定为1)
 with torch.no_grad():
     y_ste = torch.round(x)
 y_ste.backward(torch.ones_like(y_ste), retain_graph=True)
 print("STE 梯度:", x.grad)  # tensor([1., 1., 1.])
 
-# SLL (梯度智能集中在边界附近)
 x.grad.zero_()
-@sll.linearize(eps=0.1)
+@sll_core.linearize(eps=0.1)
 def sll_round(x):
     return torch.round(x)
 
 y_sll = sll_round(x)
 y_sll.backward(torch.ones_like(y_sll))
-print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])  # 只有边界处有梯度！
+print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])  
 ```
 
 **结论**：SLL 在保持前向精度的同时，智能地将梯度集中在真正需要优化的边界区域，实现更高效的训练。
@@ -308,7 +353,7 @@ print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])  # 只有边界处有梯度
 
 ```
 sll-core/
-├── sll/
+├── sll_core/
 │   ├── __init__.py          # 模块导出
 │   ├── core.py              # 核心 API（linearize）
 │   ├── discovery.py         # 自动发现装饰器
