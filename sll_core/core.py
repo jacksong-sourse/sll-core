@@ -67,8 +67,11 @@ class SLL:
         - Enables gradient flow through discrete operations
     """
     
-    def __init__(self, func=None, eps=1e-3):
+    def __init__(self, func=None, eps=1e-3, max_grad_norm=1e3, smooth_factor=1.0, sensitivity_scale=1.0):
         self.eps = float(eps)
+        self.max_grad_norm = float(max_grad_norm)
+        self.smooth_factor = float(smooth_factor)
+        self.sensitivity_scale = float(sensitivity_scale)
         self._func = func
     
     def __call__(self, *args, **kwargs):
@@ -93,7 +96,14 @@ class SLL:
             bound_args.apply_defaults()
             args = tuple(bound_args.arguments[key] for key in sig.parameters.keys())
         
-        return _SLLFunction.apply(self.eps, self._func, *args)
+        return _SLLFunction.apply(
+            self.eps, 
+            self.max_grad_norm, 
+            self.smooth_factor, 
+            self.sensitivity_scale,
+            self._func, 
+            *args
+        )
     
     def __get__(self, instance, owner):
         if instance is None:
@@ -103,8 +113,11 @@ class SLL:
 
 class _SLLFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, eps, func, *args):
+    def forward(ctx, eps, max_grad_norm, smooth_factor, sensitivity_scale, func, *args):
         ctx.eps = eps
+        ctx.max_grad_norm = max_grad_norm
+        ctx.smooth_factor = smooth_factor
+        ctx.sensitivity_scale = sensitivity_scale
         ctx.func = func
         
         tensor_mask = [isinstance(arg, torch.Tensor) for arg in args]
@@ -116,6 +129,8 @@ class _SLLFunction(torch.autograd.Function):
         
         if isinstance(result, torch.Tensor):
             result = result.detach()
+        elif isinstance(result, tuple):
+            result = tuple(r.detach() if isinstance(r, torch.Tensor) else r for r in result)
         
         ctx.save_for_backward(*tensor_args)
         ctx.tensor_indices = tensor_indices
@@ -123,9 +138,17 @@ class _SLLFunction(torch.autograd.Function):
         ctx.args = args
         ctx.result = result
         ctx.result_is_tensor = isinstance(result, torch.Tensor)
+        ctx.result_is_tuple = isinstance(result, tuple)
         
         if ctx.result_is_tensor:
             ctx.discrete_points = _detect_discrete_points(result)
+        elif ctx.result_is_tuple:
+            ctx.discrete_points = []
+            for r in result:
+                if isinstance(r, torch.Tensor):
+                    ctx.discrete_points.append(_detect_discrete_points(r))
+                else:
+                    ctx.discrete_points.append(None)
         else:
             ctx.discrete_points = None
         
@@ -134,81 +157,127 @@ class _SLLFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, *grad_outputs):
         eps = ctx.eps
+        max_grad_norm = ctx.max_grad_norm
+        smooth_factor = ctx.smooth_factor
+        sensitivity_scale = ctx.sensitivity_scale
         func = ctx.func
         args = ctx.args
         saved_tensors = ctx.saved_tensors
         tensor_indices = ctx.tensor_indices
         tensor_mask = ctx.tensor_mask
         
-        grads = []
+        grads = [None] * len(tensor_mask)
         tensor_idx = 0
         
-        if not isinstance(ctx.result, tuple):
-            grad_outputs = grad_outputs[:1]
-        else:
-            grad_outputs = grad_outputs[:len(ctx.result)]
-        
-        grad_output = grad_outputs[0] if grad_outputs else None
+        outputs = []
+        if ctx.result_is_tensor:
+            if grad_outputs and grad_outputs[0] is not None:
+                outputs.append((0, ctx.result, grad_outputs[0]))
+        elif ctx.result_is_tuple:
+            for i, r in enumerate(ctx.result):
+                if isinstance(r, torch.Tensor) and i < len(grad_outputs) and grad_outputs[i] is not None:
+                    outputs.append((i, r, grad_outputs[i]))
         
         for i, is_tensor in enumerate(tensor_mask):
-            if is_tensor:
-                tensor = saved_tensors[tensor_idx]
-                tensor_idx += 1
+            if not is_tensor:
+                continue
+            
+            tensor = saved_tensors[tensor_idx]
+            tensor_idx += 1
+            
+            if not tensor.requires_grad:
+                grads[i] = None
+                continue
+            
+            total_grad = torch.zeros_like(tensor)
+            
+            for output_idx, result, grad_output in outputs:
+                args_plus = list(args)
+                args_minus = list(args)
+                args_plus[i] = tensor.detach() + eps
+                args_minus[i] = tensor.detach() - eps
                 
-                if tensor.requires_grad and grad_output is not None:
-                    args_plus = list(args)
-                    args_minus = list(args)
-                    args_plus[i] = tensor.detach() + eps
-                    args_minus[i] = tensor.detach() - eps
-                    
-                    with torch.no_grad():
-                        result_plus = func(*args_plus)
-                        result_minus = func(*args_minus)
-                    
-                    if ctx.result_is_tensor and isinstance(result_plus, torch.Tensor) and isinstance(result_minus, torch.Tensor):
-                        diff = result_plus - result_minus
-                        
-                        if diff.numel() == 1:
-                            diff = diff.expand_as(tensor)
-                        elif diff.shape != tensor.shape:
-                            scale_factor = tensor.numel() / diff.numel() if diff.numel() > 0 else 1.0
-                            diff_flat = diff.flatten().mean() if diff.numel() > 0 else 0.0
-                            diff = torch.full_like(tensor, diff_flat.item()) * scale_factor
-                        
-                        mask = torch.abs(diff) > 1e-10
-                        mask = mask.float()
-                        grad = grad_output / (2 * eps) * diff * mask
-                        
-                        grad = torch.clamp(grad, min=-1e5, max=1e5)
-                        grad = torch.nan_to_num(grad, nan=0.0, posinf=1e5, neginf=-1e5)
+                with torch.no_grad():
+                    result_plus = func(*args_plus)
+                    result_minus = func(*args_minus)
+                
+                if ctx.result_is_tuple:
+                    if isinstance(result_plus, tuple) and isinstance(result_minus, tuple):
+                        rp = result_plus[output_idx]
+                        rm = result_minus[output_idx]
                     else:
-                        grad = grad_output * torch.ones_like(tensor)
-                    
-                    grads.append(grad)
+                        continue
                 else:
-                    grads.append(None)
-            else:
-                grads.append(None)
+                    rp = result_plus
+                    rm = result_minus
+                
+                if isinstance(rp, torch.Tensor) and isinstance(rm, torch.Tensor):
+                    diff = rp - rm
+                    
+                    if diff.numel() == 1:
+                        diff = diff.expand_as(tensor)
+                    elif diff.shape != tensor.shape:
+                        result_numel = diff.numel()
+                        input_numel = tensor.numel()
+                        
+                        if result_numel < input_numel:
+                            repeats = (input_numel + result_numel - 1) // result_numel
+                            diff = diff.repeat(repeats)[:input_numel].view(tensor.shape)
+                        else:
+                            diff = diff.flatten().mean()
+                            diff = torch.full_like(tensor, diff.item())
+                    
+                    abs_diff = torch.abs(diff)
+                    
+                    if smooth_factor > 0:
+                        smooth_mask = torch.exp(-abs_diff ** 2 / (2 * smooth_factor * eps ** 2))
+                        clipped_diff = diff * smooth_mask
+                    else:
+                        smooth_mask = (abs_diff > eps * 1e-3).float()
+                        clipped_diff = diff * smooth_mask
+                    
+                    grad_contribution = grad_output / (2 * eps) * clipped_diff * sensitivity_scale
+                    
+                    grad_contribution = torch.clamp(grad_contribution, min=-max_grad_norm, max=max_grad_norm)
+                    grad_contribution = torch.nan_to_num(grad_contribution, nan=0.0, posinf=max_grad_norm, neginf=-max_grad_norm)
+                    
+                    total_grad += grad_contribution
+                else:
+                    total_grad += grad_output * torch.ones_like(tensor)
+            
+            grads[i] = total_grad
         
-        return (None, None) + tuple(grads)
+        return (None, None, None, None, None) + tuple(grads)
 
 
-def sll(func=None, eps=1e-3):
+def sll(func=None, eps=1e-3, max_grad_norm=1e3, smooth_factor=1.0, sensitivity_scale=1.0):
     """
     Decorator to make functions with discrete operations differentiable.
     
     Args:
         func: Function to wrap
-        eps: Epsilon for linearization region
+        eps: Epsilon for linearization region (default: 1e-3)
+        max_grad_norm: Maximum gradient norm (default: 1e3)
+        smooth_factor: Smoothing factor for boundary handling (default: 1.0)
+                       Larger values = more smoothing
+        sensitivity_scale: Scale factor for gradient sensitivity (default: 1.0)
+                          Larger values = more sensitive gradients
     
     Usage:
         @sll
         def my_function(x):
             return torch.round(x)
+        
+        # With custom parameters
+        @sll(eps=1e-4, max_grad_norm=100.0, smooth_factor=2.0)
+        def my_function(x):
+            return torch.where(x > 0, torch.sin(x), torch.cos(x))
     """
     if func is None:
-        return lambda f: SLL(f, eps=eps)
-    return SLL(func, eps=eps)
+        return lambda f: SLL(f, eps=eps, max_grad_norm=max_grad_norm, 
+                            smooth_factor=smooth_factor, sensitivity_scale=sensitivity_scale)
+    return SLL(func, eps=eps, max_grad_norm=max_grad_norm, 
+               smooth_factor=smooth_factor, sensitivity_scale=sensitivity_scale)
 
 
 def discretize_to_continuous(discrete_tensor, eps=1e-3):
