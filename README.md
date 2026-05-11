@@ -154,12 +154,15 @@ loss.backward()
 ### SLL 类
 
 ```python
-class SLL(func=None, eps=1e-3)
+class SLL(func=None, eps=1e-3, max_grad_norm=1e3, smooth_factor=1.0, sensitivity_scale=1.0)
 ```
 
 **参数**:
 - `func`: 要包装的函数（可选）
 - `eps`: 线性化区域的宽度，默认 1e-3
+- `max_grad_norm`: 最大梯度范数，用于防止梯度爆炸，默认 1e3
+- `smooth_factor`: 边界平滑因子，值越大边界梯度越平滑，默认 1.0
+- `sensitivity_scale`: 梯度灵敏度缩放因子，默认 1.0
 
 ### sll 装饰器
 
@@ -167,7 +170,25 @@ class SLL(func=None, eps=1e-3)
 @sll(eps=1e-3)
 def my_function(x):
     return torch.round(x)
+
+# 使用自定义参数
+@sll(eps=1e-3, max_grad_norm=10.0, smooth_factor=10.0)
+def complex_function(x):
+    return torch.where(x > 0, torch.sin(x), torch.cos(x))
 ```
+
+### 参数调优指南
+
+| 参数 | 作用 | 推荐值 |
+|------|------|--------|
+| `eps` | 线性化区域宽度 | 1e-4 ~ 1e-3 |
+| `max_grad_norm` | 限制最大梯度 | 简单函数用 1e3，复杂条件用 10~100 |
+| `smooth_factor` | 边界平滑 | 简单函数用 0~1，复杂条件用 5~20 |
+| `sensitivity_scale` | 梯度灵敏度 | 默认 1.0 |
+
+**使用建议**:
+- **简单函数**（如 `torch.round`, `torch.clamp`）: `smooth_factor=0`
+- **复杂条件函数**（如 `torch.where`）: `smooth_factor=10`, `max_grad_norm=10`
 
 ### make_differentiable 函数
 

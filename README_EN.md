@@ -154,12 +154,15 @@ loss.backward()
 ### SLL Class
 
 ```python
-class SLL(func=None, eps=1e-3)
+class SLL(func=None, eps=1e-3, max_grad_norm=1e3, smooth_factor=1.0, sensitivity_scale=1.0)
 ```
 
 **Parameters**:
 - `func`: Function to wrap (optional)
 - `eps`: Width of linearization region, default 1e-3
+- `max_grad_norm`: Maximum gradient norm to prevent gradient explosion, default 1e3
+- `smooth_factor`: Boundary smoothing factor, larger values make boundary gradients smoother, default 1.0
+- `sensitivity_scale`: Gradient sensitivity scaling factor, default 1.0
 
 ### sll Decorator
 
@@ -167,7 +170,25 @@ class SLL(func=None, eps=1e-3)
 @sll(eps=1e-3)
 def my_function(x):
     return torch.round(x)
+
+# With custom parameters
+@sll(eps=1e-3, max_grad_norm=10.0, smooth_factor=10.0)
+def complex_function(x):
+    return torch.where(x > 0, torch.sin(x), torch.cos(x))
 ```
+
+### Parameter Tuning Guide
+
+| Parameter | Purpose | Recommended Values |
+|-----------|---------|-------------------|
+| `eps` | Linearization region width | 1e-4 ~ 1e-3 |
+| `max_grad_norm` | Limit maximum gradient | 1e3 for simple functions, 10~100 for complex conditions |
+| `smooth_factor` | Boundary smoothing | 0~1 for simple functions, 5~20 for complex conditions |
+| `sensitivity_scale` | Gradient sensitivity | Default 1.0 |
+
+**Usage Recommendations**:
+- **Simple functions** (e.g., `torch.round`, `torch.clamp`): `smooth_factor=0`
+- **Complex conditional functions** (e.g., `torch.where`): `smooth_factor=10`, `max_grad_norm=10`
 
 ### make_differentiable Function
 
