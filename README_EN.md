@@ -2,12 +2,11 @@
 
 # 🔷 SLL-Core: Static Local Linearization
 
-**Zero-Invasion Differentiable Engine for Discrete Programs**
+**Differentiable Transformation Engine for Discrete Points**
 
 [![PyPI Version](https://img.shields.io/pypi/v/sll-core.svg)](https://pypi.org/project/sll-core/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/sll-core.svg)](https://pypi.org/project/sll-core/)
 [![License](https://img.shields.io/github/license/jacksong-sourse/sll-core.svg)](https://github.com/jacksong-sourse/sll-core/blob/main/LICENSE)
-[![Downloads](https://static.pepy.tech/badge/sll-core)](https://pepy.tech/project/sll-core)
 
 <p align="center">
   <a href="./README.md">中文</a> | <a href="./README_EN.md">English</a>
@@ -15,19 +14,56 @@
 
 </div>
 
+---
 
-## 🎯 Introduction
+## 🎯 Core Problem
 
-SLL-Core is a PyTorch library based on **Static Local Linearization** principle, providing **zero-invasion** automatic differentiation for discrete operations.
+**Limitations of Discrete Points (Non-Differentiable Systems)**
 
-**Key Advantages**:
+In mathematics and computing, **continuous functions** have rich tools and operations, while **discrete points** are severely limited:
 
-- ✅ **Zero Code Changes**: Decorate existing code directly, no model structure modification required
-- ✅ **Zero Deployment Overhead**: Differentiable during training, automatically restores hard logic during deployment
-- ✅ **Stable Convergence**: Constant gradient design, no vanishing/exploding gradient issues
-- ✅ **Mathematical Guarantee**: As ε→0, the optimal solution converges to the original discrete problem
+### Computational Methods Comparison
 
-***
+| Mathematical Domain | Continuous Functions (Lines) | Discrete Points |
+|-------------------|-----------------------------|-----------------|
+| **Calculus** | Differentiation, Integration, Differential Equations | ❌ Not applicable |
+| **Optimization** | Gradient Descent, Newton's Method, Conjugate Gradient | ❌ Zero or non-existent gradients |
+| **Analysis** | Taylor Expansion, Fourier Transform | ❌ Requires special handling |
+| **Probability** | Probability Density Function (PDF) | ✅ Probability Mass Function (PMF) |
+| **Algebra** | Matrix Operations, Eigenanalysis | ✅ Finite Field Operations |
+
+### Specific Limitations of Discrete Points
+
+| Operation Type | Discrete Point Problem | Continuous Function Advantage |
+|---------------|----------------------|------------------------------|
+| **Differentiation** | No tangent line, derivative doesn't exist | Differentiable at any point |
+| **Chain Rule** | Gradient cannot propagate across discrete boundaries | Smooth gradient flow |
+| **Integration** | Cannot define integration interval | Can compute definite/indefinite integrals |
+| **Optimization** | Discrete jumps make optimization difficult | Smooth surface for efficient optimization |
+| **Approximation** | Only finite differences available | Taylor expansion, interpolation, etc. |
+
+**In short**: Continuous functions have rich mathematical tools (derivatives, integrals, optimization algorithms, etc.), while discrete points can hardly use any of these tools.
+
+---
+
+## 💡 SLL Solution
+
+**Transform Discrete Points into Differentiable Continuous Functions**
+
+The core idea of SLL (Static Local Linearization) is:
+
+```
+Discrete point x_i → Piecewise linear function y = x_i + k*(x - x_i)
+```
+
+Create an infinitesimally small linear region around each discrete point `x_i`, such that:
+- Function value remains unchanged at `x_i`
+- Gradient can propagate through the linear function
+- All operations in the differential system can be applied normally
+
+**This is the core value of SLL**: Enables powerful mathematical tools originally designed for continuous functions to be applied to discrete data!
+
+---
 
 ## ⚡ Quick Start
 
@@ -35,20 +71,24 @@ SLL-Core is a PyTorch library based on **Static Local Linearization** principle,
 import torch
 import sll_core
 
-@ sll_core.linearize(eps=1e-2)
+# Define function with discrete operations
 def my_discrete_function(x):
-    y = torch.sign(x)      
-    z = torch.round(y * 10)
-    return z.sum()
+    return torch.round(x)
 
-x = torch.tensor([-1.0, 0.0, 1.0], requires_grad=True)
-loss = my_discrete_function(x)
-loss.backward()
+# Wrap with SLL to make it differentiable
+wrapped_func = sll_core.SLL(my_discrete_function)
 
-print(x.grad)  
+# Now we can compute gradients normally!
+x = torch.tensor([1.2, 2.5, 3.7], requires_grad=True)
+y = wrapped_func(x)
+y.backward(torch.ones_like(y))
+
+print(f"Input: {x}")
+print(f"Output: {y}")
+print(f"Gradient: {x.grad}")
 ```
 
-***
+---
 
 ## 🚀 Installation
 
@@ -58,443 +98,198 @@ pip install sll-core
 
 **Requirements**: Python ≥ 3.8, PyTorch ≥ 1.9.0
 
-***
+---
 
 ## 📖 Usage
 
-### Method 1: Decorator (Recommended)
+### Method 1: Class Wrapping
 
 ```python
-import torch
 import sll_core
 
-@ sll_core.linearize(eps=1e-3)
-def custom_algorithm(x):
-    mask = (x > 0.5).float()   
-    y = torch.sign(x)           
-    return mask * y
+def quantize(x):
+    return torch.round(x * 255) / 255
 
-x = torch.tensor([-0.5, 0.5], requires_grad=True)
-y = custom_algorithm(x)
-y.sum().backward()
+# Create differentiable wrapper
+wrapped_quantize = sll_core.SLL(quantize, eps=1e-3)
+
+x = torch.tensor([0.123, 0.456, 0.789], requires_grad=True)
+y = wrapped_quantize(x)
+y.backward(torch.ones_like(y))
 ```
 
-### Method 2: Context Manager
+### Method 2: Decorator
 
 ```python
-import torch
 import sll_core
 
-x = torch.tensor([1.2, 2.5], requires_grad=True)
+@sll_core.sll(eps=1e-3)
+def threshold(x):
+    return (x > 0.5).float()
 
-with sll_core.linearize(eps=1e-3):
-    y = torch.round(x)
-    y.backward(torch.ones_like(y))
-
-print(x.grad)  
+x = torch.tensor([0.3, 0.6, 0.9], requires_grad=True)
+y = threshold(x)
+y.backward(torch.ones_like(y))
 ```
 
-### Method 3: Manual Operators
+### Method 3: Direct Conversion
 
 ```python
-from sll_core.ops import heaviside, sign, round, floor, ceil
-
-x = torch.tensor([0.0], requires_grad=True)
-y = sll_core.sign(x, eps=1e-3)
-y.backward()
-print(x.grad)  # tensor([500.])
-```
-
-### **Note**: Sll-Core can be applied in code where almost all discrete operations are 'small and local', while the overall framework is still based on gradient descent. So far, only three have been demonstrated.
-
-***
-
-## 🔧 Supported Operators
-
-| Operator    | Description                | Usage Example                     |
-| ----------- | -------------------------- | --------------------------------- |
-| `heaviside` | Heaviside step function    | `sll_core.heaviside(x)`                |
-| `sign`      | Sign function              | `sll_core.sign(x)`                     |
-| `round`     | Round to nearest integer   | `sll_core.round(x)`                    |
-| `floor`     | Floor function             | `sll_core.floor(x)`                    |
-| `ceil`      | Ceiling function           | `sll_core.ceil(x)`                     |
-| `threshold` | General threshold function | `sll_core.threshold(x, threshold=0.5)` |
-
-***
-
-## 🔬 Applications
-
-### Application 1: Quantization-Aware Training (QAT)
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def quantize(x, levels=256):
-    scale = (levels - 1) / (x.max() - x.min() + 1e-10)
-    return torch.round((x - x.min()) * scale) / scale + x.min()
-```
-
-### Application 2: Combinatorial Optimization
-
-```python
-@ sll_core.linearize(eps=1e-2)
-def knapsack(probabilities):
-    selected = (probabilities > 0.5).float()
-    total_weight = (selected * weights).sum()
-    total_value = (selected * values).sum()
-    penalty = torch.max(torch.tensor(0.0), total_weight - capacity) * 100
-    return total_value - penalty
-```
-
-### Application 3: Discrete Control Policy
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def discrete_controller(state):
-    action_prob = torch.sigmoid(state)
-    action = (action_prob > 0.5).float()  # Discrete decision
-    return action
-```
-
-### Application 4: Neural Network Pruning
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def magnitude_pruning(weights, threshold=0.01):
-    mask = (torch.abs(weights) > threshold).float()
-    pruned_weights = weights * mask
-    return pruned_weights
-```
-
-### Application 5: Image Segmentation Thresholding
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def binary_segmentation(logits, threshold=0.5):
-    prob = torch.sigmoid(logits)
-    mask = (prob > threshold).float()
-    return mask
-```
-
-### Application 6: Reinforcement Learning Action Selection
-
-```python
-@ sll_core.linearize(eps=1e-2)
-def epsilon_greedy_action(q_values, epsilon=0.1):
-    best_action = torch.argmax(q_values, dim=-1)
-    random_action = torch.randint(0, q_values.shape[-1], best_action.shape)
-    use_random = (torch.rand_like(best_action.float()) < epsilon).float()
-    action = (1 - use_random) * best_action.float() + use_random * random_action.float()
-    return action.long()
-```
-
-### Application 7: Data Compression Quantization
-
-```python
-@ sll_core.linearize(eps=1e-4)
-def ternary_quantization(x):
-    scale = torch.max(torch.abs(x))
-    normalized = x / (scale + 1e-10)
-    quantized = torch.sign(normalized) * (torch.abs(normalized) > 0.5).float()
-    return quantized * scale
-```
-
-### Application 8: Sparse Attention Mechanism
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def sparse_attention(attention_scores, top_k=16):
-    top_vals, top_idx = torch.topk(attention_scores, top_k, dim=-1)
-    mask = torch.zeros_like(attention_scores)
-    mask.scatter_(-1, top_idx, 1.0)
-    sparse_scores = attention_scores * mask
-    return sparse_scores / (sparse_scores.sum(dim=-1, keepdim=True) + 1e-10)
-```
-
-***
-
-## ⚙️ Parameter Description
-
-| Parameter | Type  | Default | Description                          |
-| --------- | ----- | ------- | ------------------------------------ |
-| `eps`     | float | 1e-3    | Half-width of linearization interval |
-
-**How** **`eps`** **works**:
-
-- Input within `eps` of hard boundary: Use linearization approximation (has gradient)
-- Input beyond `eps` from hard boundary: Use original hard logic (gradient=0)
-- Smaller `eps`: Closer to hard logic, narrower gradient region
-- Larger `eps`: Smoother transition, wider approximation region
-
-***
-
-## 📊 Gradient Comparison
-
-| Method             | Forward Output | Boundary Gradient | Far from Boundary | Tuning Difficulty |
-| ------------------ | -------------- | ----------------- | ----------------- | ----------------- |
-| Hard Function      | Exact          | 0                 | 0                 | -                 |
-| STE                | Exact          | 1                 | 1                 | -                 |
-| Sigmoid Relaxation | Approximate    | Gaussian peak     | 0                 | High              |
-| **SLL**            | **Exact**      | **1/(2ε)**        | **0**             | **Low**           |
-
-***
-
-***
-
-## 💥Demo: QAT Quantization-Aware Training
-
-### 🚀 Zero-Invasion Differentiable Quantization Training
-
-```python
-import torch
-import torch.nn as nn
 import sll_core
 
-class SimpleNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(10, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 10)
-    
-    @sll_core.linearize(eps=1e-3)
-    def quantize(self, x, levels=256):
-        scale = (levels - 1) / (x.max() - x.min() + 1e-10)
-        quantized = torch.round((x - x.min()) * scale) / scale + x.min()
-        return quantized
-    
-    def forward(self, x):
-        x = self.fc1(x)
-        x = torch.relu(x)
-        x = self.quantize(x)  
-        x = self.fc2(x)
-        x = torch.relu(x)
-        x = self.quantize(x)  
-        x = self.fc3(x)
-        return x
+x = torch.tensor([0.0, 1.0, 2.0], requires_grad=True)
+discrete_output = (x > 0.5).float()
 
-model = SimpleNet()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-criterion = nn.CrossEntropyLoss()
+# Convert discrete output to differentiable form
+diff_output = sll_core.make_differentiable(discrete_output, eps=1e-3)
 
-for epoch in range(100):
-    x = torch.randn(32, 10)
-    y = torch.randint(0, 10, (32,))
-    
-    optimizer.zero_grad()
-    output = model(x)
-    loss = criterion(output, y)
-    loss.backward()  
-    optimizer.step()
-    
-    if (epoch + 1) % 20 == 0:
-        print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+loss = diff_output.sum()
+loss.backward()
 ```
-
-### 📊 Comparison: SLL vs STE vs Sigmoid Relaxation
-
-| Metric                 | STE    | Sigmoid Relaxation | **SLL**       |
-| ---------------------- | ------ | ------------------ | ------------- |
-| **Forward Accuracy**   | Exact  | Approximate        | **Exact**     |
-| **Convergence Speed**  | Slow   | Medium             | **Fastest**   |
-| **Vanishing Gradient** | Common | Occasional         | **None**      |
-| **Tuning Difficulty**  | -      | High               | **Low**       |
-| **Training Stability** | Poor   | Medium             | **Excellent** |
-
-### ⚡ Performance Data
-
-On MNIST quantization-aware training task:
-
-- **SLL**: 97.8% accuracy, converges in 50 epochs
-- **STE**: 94.2% accuracy, not fully converged after 100 epochs
-- **Sigmoid**: 95.1% accuracy, requires careful tuning
-
-### 📈 Training Loss Comparison
-
-![Training Loss Comparison](loss_comparison.png)
-
-### 🎯 Core Advantage Demonstration
-
-```python
-import torch
-import sll_core
-
-x = torch.tensor([0.001, 0.5, 0.999], requires_grad=True)
-
-with torch.no_grad():
-    y_ste = torch.round(x)
-y_ste.backward(torch.ones_like(y_ste), retain_graph=True)
-print("STE gradient:", x.grad)  # tensor([1., 1., 1.])
-
-x.grad.zero_()
-@sll_core.linearize(eps=0.1)
-def sll_round(x):
-    return torch.round(x)
-
-y_sll = sll_round(x)
-y_sll.backward(torch.ones_like(y_sll))
-print("SLL gradient:", x.grad)  # tensor([0., 5., 0.])  
-```
-
-**Conclusion**: SLL maintains exact forward accuracy while intelligently concentrating gradients in boundary regions where optimization is actually needed, achieving more efficient training.
-
-### 🎨 Gradient Distribution Comparison
-
-![Gradient Distribution](gradient_comparison.png)
-
-**Actual Test Results**:
-- SLL gradients: `[25.0, 0.0, 25.0, 0.0, 25.0]` — Only at boundaries
-- STE gradients: `[1.0, 1.0, 1.0, 1.0, 1.0]` — Everywhere, inefficient
 
 ---
 
-## 🧪 More Test Cases
+## 🔧 API Reference
 
-### Test Case 1: Basic Operator Gradient Verification
+### SLL Class
 
 ```python
-import torch
-import sll_core
-
-x = torch.tensor([-0.5, 0.0, 0.5], requires_grad=True)
-
-with sll_core.linearize(eps=1e-2):
-    y = (torch.sign(x) 
-         + torch.round(x) 
-         + torch.floor(x) 
-         + torch.ceil(x))
-    y.sum().backward()
-
-print("Gradient:", x.grad)
+class SLL(func=None, eps=1e-3)
 ```
 
-### Test Case 2: EPS Parameter Sensitivity
+**Parameters**:
+- `func`: Function to wrap (optional)
+- `eps`: Width of linearization region, default 1e-3
+
+### sll Decorator
 
 ```python
-import torch
-import sll_core
-
-x = torch.tensor([0.0], requires_grad=True)
-
-for eps in [1e-1, 1e-2, 1e-3]:
-    x.grad = None
-    y = sll_core.sign(x, eps=eps)
-    y.backward()
-    print(f"eps={eps}, grad={x.grad.item():.1f}")
+@sll(eps=1e-3)
+def my_function(x):
+    return torch.round(x)
 ```
 
-### Test Case 3: Composite Discrete Function
+### make_differentiable Function
 
 ```python
-import torch
-import sll_core
-
-@sll_core.linearize(eps=1e-2)
-def complex_logic(x):
-    mask = (x > 0.0).float()          
-    sign_x = torch.sign(x)            
-    quantized = torch.round(x * 10)  
-    return mask * sign_x + quantized
-
-x = torch.tensor([-0.05, 0.0, 0.05], requires_grad=True)
-loss = complex_logic(x).sum()
-loss.backward()
-print("Gradient at boundaries:", x.grad)
+make_differentiable(output, eps=1e-3)
 ```
 
-### Test Case 4: Computational Geometry — Point-to-Segment Distance
+**Parameters**:
+- `output`: Discrete output tensor
+- `eps`: Linearization parameter
+
+### piecewise_linear_approximation Function
 
 ```python
-import torch
-import sll_core
-
-@sll_core.linearize(eps=1e-2)
-def point_to_segment_distance(p, a, b):
-    ab = b - a
-    ap = p - a
-    t = (ap @ ab) / (ab @ ab + 1e-10)
-
-    left = (t < 0.0).float()
-    right = (t > 1.0).float()
-
-    t_clamped = torch.clamp(t, 0.0, 1.0)
-    closest = a + t_clamped * ab
-    dist = torch.norm(p - closest)
-
-    endpoint_dist = left * torch.norm(p - a) + right * torch.norm(p - b)
-    return dist + (left + right) * endpoint_dist * 0.1
-
-p = torch.tensor([0.5, 0.5], requires_grad=True)
-a = torch.tensor([0.0, 0.0])
-b = torch.tensor([1.0, 0.0])
-
-d = point_to_segment_distance(p, a, b)
-d.backward()
-print(f"Distance={d.item():.4f}, Gradient={p.grad}")
+piecewise_linear_approximation(x, eps=1e-3)
 ```
 
-### Test Case 5: End-to-End Differentiable Knapsack
+**Parameters**:
+- `x`: Input tensor
+- `eps`: Width of piecewise linear region
+
+---
+
+## 🔬 Application Scenarios
+
+### Scenario 1: Gradient Flow Through Discrete Operations
 
 ```python
-import torch
 import sll_core
 
-@sll_core.linearize(eps=1e-2)
-def knapsack_loss(logits, weights, values, capacity):
-    probs = torch.sigmoid(logits)
-    selected = (probs > 0.5).float()
+@sll_core.sll(eps=1e-3)
+def discrete_op(x):
+    return torch.round(x)
 
+x = torch.tensor([1.5, 2.3, 3.7], requires_grad=True)
+y = discrete_op(x)
+z = y ** 2  # Continuous operation on discrete output
+
+loss = z.sum()
+loss.backward()  # Gradient flows successfully!
+```
+
+### Scenario 2: Discrete Optimization
+
+```python
+import sll_core
+
+weights = torch.tensor([2.0, 3.0, 4.0])
+values = torch.tensor([3.0, 4.0, 5.0])
+capacity = torch.tensor(8.0)
+
+@sll_core.sll(eps=0.1)
+def knapsack_objective(probabilities):
+    selected = (probabilities > 0.5).float()  # Discrete decision
     total_weight = (selected * weights).sum()
     total_value = (selected * values).sum()
+    penalty = torch.max(torch.tensor(0.0), total_weight - capacity) * 100
+    return -(total_value - penalty)
 
-    penalty = torch.relu(total_weight - capacity) ** 2 * 100
-    return -total_value + penalty
+probabilities = torch.tensor([0.5, 0.5, 0.5], requires_grad=True)
+optimizer = torch.optim.Adam([probabilities], lr=0.1)
 
-weights = torch.tensor([2.0, 3.0, 4.0, 5.0])
-values = torch.tensor([3.0, 4.0, 5.0, 6.0])
-capacity = 7.0
-
-logits = torch.zeros(4, requires_grad=True)
-optimizer = torch.optim.Adam([logits], lr=0.1)
-
-for step in range(200):
+for _ in range(100):
     optimizer.zero_grad()
-    loss = knapsack_loss(logits, weights, values, capacity)
-    loss.backward()
+    loss = knapsack_objective(probabilities)
+    loss.backward()  # Differentiable!
     optimizer.step()
-
-probs = torch.sigmoid(logits)
-print("Final selection probabilities:", probs.detach())
-print("Final loss:", loss.item())
 ```
 
-### Test Case 6: Training Stability — Gradient Flow Guarantee
+### Scenario 3: Quantization-Aware Training
 
 ```python
-import torch
+import torch.nn as nn
 import sll_core
 
-torch.manual_seed(42)
-x = torch.linspace(-1, 1, 5, requires_grad=True)
+class QuantizedNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+        self.quantize = sll_core.SLL(lambda x: torch.round(x * 16) / 16)
+    
+    def forward(self, x):
+        x = self.fc(x)
+        x = self.quantize(x)  # Discrete quantization
+        return x
 
-y_hard = torch.sign(x)
-y_hard.sum().backward()
-grad_hard = x.grad.clone()
-
-x.grad = None
-
-@sll_core.linearize(eps=0.2)
-def stable_sign(x):
-    return torch.sign(x)
-
-y_sll = stable_sign(x)
-y_sll.sum().backward()
-grad_sll = x.grad
-
-print("Hard gradient: ", grad_hard)
-print("SLL gradient:  ", grad_sll)
+model = QuantizedNet()
+x = torch.randn(3, 10, requires_grad=True)
+y = model(x)
+y.sum().backward()  # Gradient flows through quantization!
 ```
 
-***
+---
+
+## ⚙️ Mathematical Principles
+
+### Core Formula
+
+At each discrete point `x_i`, SLL creates the following piecewise linear function:
+
+```
+y = x_i + (x - x_i) * (1/eps)    for x ∈ [x_i - eps/2, x_i + eps/2]
+```
+
+### Gradient Calculation
+
+Using finite difference approximation:
+
+```
+df/dx ≈ [f(x+ε) - f(x-ε)] / (2ε)
+```
+
+### Key Features
+
+| Feature | Description |
+|--------|-------------|
+| **Value Preservation** | Function value remains unchanged at discrete points |
+| **Differentiability** | Normal differentiation within linear region |
+| **Chain Rule** | Gradient propagates through chain rule |
+| **Numerical Stability** | Gradient range limited by clamp |
+
+---
 
 ## 🏛️ Project Structure
 
@@ -502,42 +297,97 @@ print("SLL gradient:  ", grad_sll)
 sll-core/
 ├── sll_core/
 │   ├── __init__.py          # Module exports
-│   ├── core.py              # Core API (linearize)
-│   ├── discovery.py         # Auto-discovery decorator
-│   └── ops.py               # SLL operator implementations
-├── README.md
-├── README_EN.md
-├── LICENSE
-└── pyproject.toml
+│   └── core.py              # Core implementation
+├── README.md                # Chinese documentation
+├── README_EN.md             # English documentation
+├── LICENSE                  # License
+└── pyproject.toml           # Packaging configuration
 ```
 
-***
+---
+
+## 📈 Comparison Analysis
+
+### Computational Capabilities: Discrete vs Continuous
+
+| Mathematical Operation | Discrete Points (Original) | Continuous Functions | After SLL Transformation |
+|----------------------|---------------------------|---------------------|-------------------------|
+| **Differentiation** | ❌ Not possible | ✅ Possible | ✅ Possible |
+| **Chain Rule** | ❌ Broken | ✅ Works normally | ✅ Works normally |
+| **Integration** | ❌ Not possible | ✅ Possible | ✅ Possible |
+| **Optimization Algorithms** | ❌ Difficult | ✅ Efficient | ✅ Efficient |
+| **Taylor Expansion** | ❌ Not possible | ✅ Possible | ✅ Possible |
+| **Fourier Transform** | ⚠️ Limited | ✅ Possible | ✅ Possible |
+
+### The Value of SLL
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Mathematical Toolbox                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Diff   │  Integral │  Opt   │  Taylor Exp  │  FFT   │    │
+│  └─────────────────────────────────────────────────────┘    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            │ Continuous functions can use directly
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Continuous Functions (Lines)            │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  f(x) = x² + 2x + 1  ← Can use all math tools     │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+
+                            │ SLL Transformation
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Discrete Points → SLL → Differentiable        │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  f(x) = round(x)  →  SLL(f)  →  Can use math tools│    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Gradient Comparison Example
+
+```python
+import torch
+import sll_core
+
+x = torch.tensor([1.2, 2.5, 3.7], requires_grad=True)
+
+# Original round operation (discrete, non-differentiable)
+y1 = torch.round(x)
+try:
+    y1.backward(torch.ones_like(y1))
+    print(f"Original gradient: {x.grad}")  # Won't reach here
+except RuntimeError as e:
+    print(f"Original operation error: {e}")
+
+# SLL wrapped (transformed to differentiable)
+@sll_core.sll(eps=1e-3)
+def round_sll(x):
+    return torch.round(x)
+
+x.grad = None
+y2 = round_sll(x)
+y2.backward(torch.ones_like(y2))
+print(f"SLL gradient: {x.grad}")
+```
+
+---
 
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE) for details
 
-***
+---
 
-## 🤝 Contributing
+## 🤝 Contribution
 
 Welcome to submit Issues and Pull Requests!
 
-### Development Environment
-
-```bash
-git clone https://github.com/jacksong-sourse/sll-core.git
-cd sll-core
-pip install -e .[dev]
-```
-
-### Running Tests
-
-```bash
-pytest tests/ -v
-```
-
-***
+---
 
 ## 📚 Citation
 
@@ -552,6 +402,6 @@ If you use SLL in your research, please cite:
 }
 ```
 
-***
+---
 
 **⭐ If this project helps you, please give it a Star!**

@@ -2,12 +2,11 @@
 
 # 🔷 SLL-Core: Static Local Linearization
 
-**离散程序的零侵入可微分化引擎**
+**离散点的可微分转换引擎**
 
 [![PyPI Version](https://img.shields.io/pypi/v/sll-core.svg)](https://pypi.org/project/sll-core/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/sll-core.svg)](https://pypi.org/project/sll-core/)
 [![License](https://img.shields.io/github/license/jacksong-sourse/sll-core.svg)](https://github.com/jacksong-sourse/sll-core/blob/main/LICENSE)
-[![Downloads](https://static.pepy.tech/badge/sll-core)](https://pepy.tech/project/sll-core)
 
 <p align="center">
   <a href="./README.md">中文</a> | <a href="./README_EN.md">English</a>
@@ -15,19 +14,56 @@
 
 </div>
 
+---
 
-## 🎯 项目简介
+## 🎯 核心问题
 
-SLL-Core 是一个基于 **静态局部线性化（Static Local Linearization）** 原理的 PyTorch 库，为离散操作提供**零侵入式**的自动微分能力。
+**离散点（非微分体系）的局限性**
 
-**核心优势**：
+在数学和计算领域，**连续函数**拥有丰富的工具和运算方法，而**离散点**则受到很大限制：
 
-- ✅ **零代码改动**：直接装饰现有代码，无需修改模型结构
-- ✅ **部署零开销**：训练时可微，部署时自动恢复硬逻辑
-- ✅ **稳定收敛**：常数梯度设计，无梯度消失/爆炸问题
-- ✅ **数学保证**：当 ε→0 时，最优解收敛到原始离散问题
+### 计算方法对比
 
-***
+| 数学领域 | 连续函数（线） | 离散点 |
+|---------|---------------|-------|
+| **微积分** | 求导、积分、微分方程 | ❌ 无法直接应用 |
+| **优化** | 梯度下降、牛顿法、共轭梯度 | ❌ 梯度为零或不存在 |
+| **分析** | 泰勒展开、傅里叶变换 | ❌ 需要特殊处理 |
+| **概率** | 概率密度函数(PDF) | ✅ 概率质量函数(PMF) |
+| **代数** | 矩阵运算、特征分析 | ✅ 有限域运算 |
+
+### 离散点的具体限制
+
+| 操作类型 | 离散点的问题 | 连续函数的优势 |
+|---------|-------------|---------------|
+| **求导** | 离散点没有切线，导数不存在 | 任意点可求导 |
+| **链式法则** | 梯度无法传递通过离散边界 | 梯度流畅传递 |
+| **积分** | 无法定义积分区间 | 可计算定积分、不定积分 |
+| **优化** | 离散跳跃导致优化困难 | 平滑曲面易于优化 |
+| **逼近** | 只能用有限差分 | 泰勒展开、插值等多种方法 |
+
+**一句话总结**：连续函数拥有丰富的数学工具（导数、积分、优化算法等），而离散点几乎无法使用这些工具。
+
+---
+
+## 💡 SLL 的解决方案
+
+**将离散点转换为可微分的连续函数**
+
+SLL（Static Local Linearization）的核心思想是：
+
+```
+离散点 x_i → 分段线性函数 y = x_i + k*(x - x_i)
+```
+
+在每个离散点 `x_i` 附近创建一个无限小的线性区域，使得：
+- 函数值在 `x_i` 处保持不变
+- 梯度可以通过线性函数传递
+- 微分体系中的所有运算都可以正常应用
+
+**这就是 SLL 的核心价值**：让原本只能应用于连续函数的强大数学工具，现在也能应用于离散数据！
+
+---
 
 ## ⚡ 快速开始
 
@@ -35,20 +71,24 @@ SLL-Core 是一个基于 **静态局部线性化（Static Local Linearization）
 import torch
 import sll_core
 
-@ sll_core.linearize(eps=1e-2)
+# 定义包含离散操作的函数
 def my_discrete_function(x):
-    y = torch.sign(x)      
-    z = torch.round(y * 10)
-    return z.sum()
+    return torch.round(x)
 
-x = torch.tensor([-1.0, 0.0, 1.0], requires_grad=True)
-loss = my_discrete_function(x)
-loss.backward()
+# 使用 SLL 包装，使其可微分
+wrapped_func = sll_core.SLL(my_discrete_function)
 
-print(x.grad)  
+# 现在可以正常计算梯度！
+x = torch.tensor([1.2, 2.5, 3.7], requires_grad=True)
+y = wrapped_func(x)
+y.backward(torch.ones_like(y))
+
+print(f"输入: {x}")
+print(f"输出: {y}")
+print(f"梯度: {x.grad}")
 ```
 
-***
+---
 
 ## 🚀 安装
 
@@ -58,296 +98,198 @@ pip install sll-core
 
 **要求**: Python ≥ 3.8，PyTorch ≥ 1.9.0
 
-***
+---
 
 ## 📖 使用方式
 
-### 方式一：装饰器（推荐）
+### 方式一：类包装
 
 ```python
-import torch
 import sll_core
 
-@ sll_core.linearize(eps=1e-3)
-def custom_algorithm(x):
-    mask = (x > 0.5).float()   
-    y = torch.sign(x)           
-    return mask * y
+def quantize(x):
+    return torch.round(x * 255) / 255
 
-x = torch.tensor([-0.5, 0.5], requires_grad=True)
-y = custom_algorithm(x)
-y.sum().backward()
+# 创建可微分包装
+wrapped_quantize = sll_core.SLL(quantize, eps=1e-3)
+
+x = torch.tensor([0.123, 0.456, 0.789], requires_grad=True)
+y = wrapped_quantize(x)
+y.backward(torch.ones_like(y))
 ```
 
-### 方式二：上下文管理器
+### 方式二：装饰器
 
 ```python
-import torch
 import sll_core
 
-x = torch.tensor([1.2, 2.5], requires_grad=True)
+@sll_core.sll(eps=1e-3)
+def threshold(x):
+    return (x > 0.5).float()
 
-with sll_core.linearize(eps=1e-3):
-    y = torch.round(x)
-    y.backward(torch.ones_like(y))
-
-print(x.grad)  
+x = torch.tensor([0.3, 0.6, 0.9], requires_grad=True)
+y = threshold(x)
+y.backward(torch.ones_like(y))
 ```
 
-### 方式三：手动算子
+### 方式三：直接转换离散输出
 
 ```python
-from sll_core.ops import heaviside, sign, round, floor, ceil
+import sll_core
 
-x = torch.tensor([0.0], requires_grad=True)
-y = sll_core.sign(x, eps=1e-3)
-y.backward()
-print(x.grad)  # tensor([500.])
+x = torch.tensor([0.0, 1.0, 2.0], requires_grad=True)
+discrete_output = (x > 0.5).float()
+
+# 将离散输出转为可微分形式
+diff_output = sll_core.make_differentiable(discrete_output, eps=1e-3)
+
+loss = diff_output.sum()
+loss.backward()
 ```
 
-***
+---
 
-## 🔧 支持的算子
+## 🔧 API 参考
 
-| 算子          | 描述             | 使用示例                              |
-| ----------- | -------------- | --------------------------------- |
-| `heaviside` | Heaviside 阶跃函数 | `sll_core.heaviside(x)`                |
-| `sign`      | 符号函数           | `sll_core.sign(x)`                     |
-| `round`     | 四舍五入           | `sll_core.round(x)`                    |
-| `floor`     | 向下取整           | `sll_core.floor(x)`                    |
-| `ceil`      | 向上取整           | `sll_core.ceil(x)`                     |
-| `threshold` | 通用阈值函数         | `sll_core.threshold(x, threshold=0.5)` |
+### SLL 类
 
-***
+```python
+class SLL(func=None, eps=1e-3)
+```
+
+**参数**:
+- `func`: 要包装的函数（可选）
+- `eps`: 线性化区域的宽度，默认 1e-3
+
+### sll 装饰器
+
+```python
+@sll(eps=1e-3)
+def my_function(x):
+    return torch.round(x)
+```
+
+### make_differentiable 函数
+
+```python
+make_differentiable(output, eps=1e-3)
+```
+
+**参数**:
+- `output`: 离散输出张量
+- `eps`: 线性化参数
+
+### piecewise_linear_approximation 函数
+
+```python
+piecewise_linear_approximation(x, eps=1e-3)
+```
+
+**参数**:
+- `x`: 输入张量
+- `eps`: 分段线性区域宽度
+
+---
 
 ## 🔬 应用场景
 
-### 场景 1：量化感知训练 (QAT)
+### 场景 1：梯度流经离散操作
 
 ```python
-@ sll_core.linearize(eps=1e-3)
-def quantize(x, levels=256):
-    scale = (levels - 1) / (x.max() - x.min() + 1e-10)
-    return torch.round((x - x.min()) * scale) / scale + x.min()
+import sll_core
+
+@sll_core.sll(eps=1e-3)
+def discrete_op(x):
+    return torch.round(x)
+
+x = torch.tensor([1.5, 2.3, 3.7], requires_grad=True)
+y = discrete_op(x)
+z = y ** 2  # 在离散输出上执行连续运算
+
+loss = z.sum()
+loss.backward()  # 梯度成功传递！
 ```
 
-### 场景 2：组合优化
+### 场景 2：离散优化问题
 
 ```python
-@ sll_core.linearize(eps=1e-2)
-def knapsack(probabilities):
-    selected = (probabilities > 0.5).float()
+import sll_core
+
+weights = torch.tensor([2.0, 3.0, 4.0])
+values = torch.tensor([3.0, 4.0, 5.0])
+capacity = torch.tensor(8.0)
+
+@sll_core.sll(eps=0.1)
+def knapsack_objective(probabilities):
+    selected = (probabilities > 0.5).float()  # 离散决策
     total_weight = (selected * weights).sum()
     total_value = (selected * values).sum()
     penalty = torch.max(torch.tensor(0.0), total_weight - capacity) * 100
-    return total_value - penalty
+    return -(total_value - penalty)
+
+probabilities = torch.tensor([0.5, 0.5, 0.5], requires_grad=True)
+optimizer = torch.optim.Adam([probabilities], lr=0.1)
+
+for _ in range(100):
+    optimizer.zero_grad()
+    loss = knapsack_objective(probabilities)
+    loss.backward()  # 可微分！
+    optimizer.step()
 ```
 
-### 场景 3：离散控制策略
+### 场景 3：量化感知训练
 
 ```python
-@ sll_core.linearize(eps=1e-3)
-def discrete_controller(state):
-    action_prob = torch.sigmoid(state)
-    action = (action_prob > 0.5).float()  # 离散决策
-    return action
-```
-
-### 场景 4：神经网络剪枝
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def magnitude_pruning(weights, threshold=0.01):
-    mask = (torch.abs(weights) > threshold).float()
-    pruned_weights = weights * mask
-    return pruned_weights
-```
-
-### 场景 5：图像分割阈值处理
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def binary_segmentation(logits, threshold=0.5):
-    prob = torch.sigmoid(logits)
-    mask = (prob > threshold).float()
-    return mask
-```
-
-### 场景 6：强化学习动作选择
-
-```python
-@ sll_core.linearize(eps=1e-2)
-def epsilon_greedy_action(q_values, epsilon=0.1):
-    best_action = torch.argmax(q_values, dim=-1)
-    random_action = torch.randint(0, q_values.shape[-1], best_action.shape)
-    use_random = (torch.rand_like(best_action.float()) < epsilon).float()
-    action = (1 - use_random) * best_action.float() + use_random * random_action.float()
-    return action.long()
-```
-
-### 场景 7：数据压缩量化
-
-```python
-@ sll_core.linearize(eps=1e-4)
-def ternary_quantization(x):
-    scale = torch.max(torch.abs(x))
-    normalized = x / (scale + 1e-10)
-    quantized = torch.sign(normalized) * (torch.abs(normalized) > 0.5).float()
-    return quantized * scale
-```
-
-### 场景 8：稀疏注意力机制
-
-```python
-@ sll_core.linearize(eps=1e-3)
-def sparse_attention(attention_scores, top_k=16):
-    top_vals, top_idx = torch.topk(attention_scores, top_k, dim=-1)
-    mask = torch.zeros_like(attention_scores)
-    mask.scatter_(-1, top_idx, 1.0)
-    sparse_scores = attention_scores * mask
-    return sparse_scores / (sparse_scores.sum(dim=-1, keepdim=True) + 1e-10)
-```
-
-### **注意**：Sll-Core可应用在几乎所有离散操作是"少量、局部"的，整体框架还是基于梯度下降的代码里。
-
-***
-
-## ⚙️ 参数说明
-
-| 参数    | 类型    | 默认值  | 说明      |
-| ----- | ----- | ---- | ------- |
-| `eps` | float | 1e-3 | 线性化区间半宽 |
-
-**eps 参数的作用**：
-
-- 输入距离硬边界 ≤ eps：使用线性化近似（有梯度）
-- 输入距离硬边界 > eps：使用原始硬逻辑（梯度为0）
-- eps 越小：越接近硬逻辑，梯度区域越窄
-- eps 越大：过渡越平滑，近似区域越宽
-
-***
-
-## 📊 梯度对比
-
-| 方法         | 前向输出   | 边界梯度       | 远离边界梯度 | 调参难度  |
-| ---------- | ------ | ---------- | ------ | ----- |
-| 硬函数        | 精确     | 0          | 0      | -     |
-| STE        | 精确     | 1          | 1      | -     |
-| Sigmoid 松弛 | 有误差    | 高斯峰        | 0      | 高     |
-| **SLL**    | **精确** | **1/(2ε)** | **0**  | **低** |
-
-***
-
-***
-
-## 💥 Demo：QAT 量化感知训练
-
-### 🚀 零侵入式可微量化训练
-
-```python
-import torch
 import torch.nn as nn
 import sll_core
 
-class SimpleNet(nn.Module):
+class QuantizedNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(10, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 10)
-    
-    @sll_core.linearize(eps=1e-3)
-    def quantize(self, x, levels=256):
-        scale = (levels - 1) / (x.max() - x.min() + 1e-10)
-        quantized = torch.round((x - x.min()) * scale) / scale + x.min()
-        return quantized
+        self.fc = nn.Linear(10, 5)
+        self.quantize = sll_core.SLL(lambda x: torch.round(x * 16) / 16)
     
     def forward(self, x):
-        x = self.fc1(x)
-        x = torch.relu(x)
-        x = self.quantize(x)  
-        x = self.fc2(x)
-        x = torch.relu(x)
-        x = self.quantize(x)  
-        x = self.fc3(x)
+        x = self.fc(x)
+        x = self.quantize(x)  # 离散量化操作
         return x
 
-model = SimpleNet()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-criterion = nn.CrossEntropyLoss()
-
-for epoch in range(100):
-    x = torch.randn(32, 10)
-    y = torch.randint(0, 10, (32,))
-    
-    optimizer.zero_grad()
-    output = model(x)
-    loss = criterion(output, y)
-    loss.backward()  
-    optimizer.step()
-    
-    if (epoch + 1) % 20 == 0:
-        print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+model = QuantizedNet()
+x = torch.randn(3, 10, requires_grad=True)
+y = model(x)
+y.sum().backward()  # 梯度成功流经量化操作！
 ```
 
-### 📊 对比实验：SLL vs STE vs Sigmoid 松弛
+---
 
-| 指标        | STE | Sigmoid 松弛 | **SLL** |
-| --------- | --- | ---------- | ------- |
-| **前向精度**  | 精确  | 有误差        | **精确**  |
-| **收敛速度**  | 慢   | 中等         | **最快**  |
-| **梯度消失**  | 常见  | 偶发         | **无**   |
-| **调参难度**  | -   | 高          | **低**   |
-| **训练稳定性** | 差   | 中等         | **优秀**  |
+## ⚙️ 数学原理
 
-### ⚡ 性能数据
+### 核心公式
 
-在 MNIST 量化感知训练任务上：
+在离散点 `x_i` 处，SLL 创建如下分段线性函数：
 
-- **SLL**: 准确率 97.8%，训练 50 epoch 收敛
-- **STE**: 准确率 94.2%，训练 100 epoch 未完全收敛
-- **Sigmoid**: 准确率 95.1%，需精心调参
-
-### 📈 训练损失对比（Demo训练损失）
-
-![Training Loss Comparison](loss_comparison.png)
-
-### 🎯 核心优势展示
-
-```python
-import torch
-import sll_core
-
-x = torch.tensor([0.001, 0.5, 0.999], requires_grad=True)
-
-with torch.no_grad():
-    y_ste = torch.round(x)
-y_ste.backward(torch.ones_like(y_ste), retain_graph=True)
-print("STE 梯度:", x.grad)  # tensor([1., 1., 1.])
-
-x.grad.zero_()
-@sll_core.linearize(eps=0.1)
-def sll_round(x):
-    return torch.round(x)
-
-y_sll = sll_round(x)
-y_sll.backward(torch.ones_like(y_sll))
-print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])  
+```
+y = x_i + (x - x_i) * (1/eps)    for x ∈ [x_i - eps/2, x_i + eps/2]
 ```
 
-**结论**：SLL 在保持前向精度的同时，智能地将梯度集中在真正需要优化的边界区域，实现更高效的训练。
+### 梯度计算
 
-### 🎨 梯度分布对比
+使用有限差分近似：
 
-![Gradient Distribution](gradient_comparison.png)
+```
+df/dx ≈ [f(x+ε) - f(x-ε)] / (2ε)
+```
 
-**实际测试结果**：
+### 关键特性
 
-- SLL 梯度: `[25.0, 0.0, 25.0, 0.0, 25.0]` — 仅在边界处有梯度
-- STE 梯度: `[1.0, 1.0, 1.0, 1.0, 1.0]` — 处处有梯度，效率低下
+| 特性 | 说明 |
+|-----|------|
+| **保持原值** | 在离散点处函数值保持不变 |
+| **可微分性** | 线性区域内可以正常求导 |
+| **链式传递** | 梯度可以通过链式法则传递 |
+| **数值稳定** | 通过 clamp 限制梯度范围 |
 
-***
-
+---
 
 ## 🏛️ 项目结构
 
@@ -355,42 +297,97 @@ print("SLL 梯度:", x.grad)  # tensor([0., 5., 0.])
 sll-core/
 ├── sll_core/
 │   ├── __init__.py          # 模块导出
-│   ├── core.py              # 核心 API（linearize）
-│   ├── discovery.py         # 自动发现装饰器
-│   └── ops.py               # SLL 算子实现
-├── README.md
-├── README_EN.md
-├── LICENSE
-└── pyproject.toml
+│   └── core.py              # 核心实现
+├── README.md                # 中文文档
+├── README_EN.md             # 英文文档
+├── LICENSE                  # 许可证
+└── pyproject.toml           # 打包配置
 ```
 
-***
+---
+
+## 📈 对比分析
+
+### 离散点 vs 连续函数的计算能力
+
+| 数学运算 | 离散点（原始） | 连续函数 | SLL 转换后 |
+|---------|--------------|---------|-----------|
+| **求导** | ❌ 不可行 | ✅ 可行 | ✅ 可行 |
+| **链式法则** | ❌ 中断 | ✅ 正常传递 | ✅ 正常传递 |
+| **积分** | ❌ 不可行 | ✅ 可行 | ✅ 可行 |
+| **优化算法** | ❌ 困难 | ✅ 高效 | ✅ 高效 |
+| **泰勒展开** | ❌ 不可行 | ✅ 可行 | ✅ 可行 |
+| **傅里叶变换** | ⚠️ 受限 | ✅ 可行 | ✅ 可行 |
+
+### SLL 的价值
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    数学工具库                               │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  求导  │  积分  │  优化  │  泰勒展开  │  傅里叶变换  │    │
+│  └─────────────────────────────────────────────────────┘    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            │ 连续函数可以直接使用
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    连续函数 (线)                            │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  f(x) = x² + 2x + 1  ← 可以使用所有数学工具         │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+
+                            │ SLL 转换
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    离散点 → SLL → 可微分函数               │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  f(x) = round(x)  →  SLL(f)  →  可使用数学工具      │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 梯度对比示例
+
+```python
+import torch
+import sll_core
+
+x = torch.tensor([1.2, 2.5, 3.7], requires_grad=True)
+
+# 原始 round 操作（离散点，不可微）
+y1 = torch.round(x)
+try:
+    y1.backward(torch.ones_like(y1))
+    print(f"原始梯度: {x.grad}")  # 不会执行到这里
+except RuntimeError as e:
+    print(f"原始操作错误: {e}")
+
+# SLL 包装后（转换为可微分函数）
+@sll_core.sll(eps=1e-3)
+def round_sll(x):
+    return torch.round(x)
+
+x.grad = None
+y2 = round_sll(x)
+y2.backward(torch.ones_like(y2))
+print(f"SLL 梯度: {x.grad}")
+```
+
+---
 
 ## 📄 许可证
 
 MIT License - 详见 [LICENSE](LICENSE)
 
-***
+---
 
 ## 🤝 贡献指南
 
 欢迎提交 Issue 和 Pull Request！
 
-### 开发环境
-
-```bash
-git clone https://github.com/jacksong-sourse/sll-core.git
-cd sll-core
-pip install -e .[dev]
-```
-
-### 运行测试
-
-```bash
-pytest tests/ -v
-```
-
-***
+---
 
 ## 📚 引用
 
@@ -405,6 +402,6 @@ pytest tests/ -v
 }
 ```
 
-***
+---
 
 **⭐ 如果这个项目对您有帮助，请给个 Star！**
