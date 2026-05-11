@@ -91,7 +91,7 @@ class SLL:
             sig = signature(self._func)
             bound_args = sig.bind(*args, **kwargs)
             bound_args.apply_defaults()
-            args = bound_args.args
+            args = tuple(bound_args.arguments[key] for key in sig.parameters.keys())
         
         return _SLLFunction.apply(self.eps, self._func, *args)
     
@@ -132,7 +132,7 @@ class _SLLFunction(torch.autograd.Function):
         return result
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, *grad_outputs):
         eps = ctx.eps
         func = ctx.func
         args = ctx.args
@@ -142,6 +142,13 @@ class _SLLFunction(torch.autograd.Function):
         
         grads = []
         tensor_idx = 0
+        
+        if not isinstance(ctx.result, tuple):
+            grad_outputs = grad_outputs[:1]
+        else:
+            grad_outputs = grad_outputs[:len(ctx.result)]
+        
+        grad_output = grad_outputs[0] if grad_outputs else None
         
         for i, is_tensor in enumerate(tensor_mask):
             if is_tensor:
@@ -164,10 +171,13 @@ class _SLLFunction(torch.autograd.Function):
                         if diff.numel() == 1:
                             diff = diff.expand_as(tensor)
                         elif diff.shape != tensor.shape:
-                            diff = torch.full_like(tensor, float((diff != 0).any()))
+                            scale_factor = tensor.numel() / diff.numel() if diff.numel() > 0 else 1.0
+                            diff_flat = diff.flatten().mean() if diff.numel() > 0 else 0.0
+                            diff = torch.full_like(tensor, diff_flat.item()) * scale_factor
                         
-                        mask = (diff != 0).float()
-                        grad = grad_output / (2 * eps) * mask
+                        mask = torch.abs(diff) > 1e-10
+                        mask = mask.float()
+                        grad = grad_output / (2 * eps) * diff * mask
                         
                         grad = torch.clamp(grad, min=-1e5, max=1e5)
                         grad = torch.nan_to_num(grad, nan=0.0, posinf=1e5, neginf=-1e5)
@@ -229,18 +239,51 @@ def discretize_to_continuous(discrete_tensor, eps=1e-3):
         def backward(ctx, grad_output):
             x, = ctx.saved_tensors
             
-            unique_values = torch.unique(x)
+            unique_values = _differentiable_unique(x)
             
             grad = torch.zeros_like(x)
             
             for v in unique_values:
-                mask = (x == v)
+                v = v.to(x.device)
+                mask = torch.abs(x - v) < 1e-6
                 if mask.any():
                     grad[mask] = grad_output[mask] * (1.0 / eps)
             
             return grad
     
     return DiscretizeToContinuous.apply(discrete_tensor)
+
+
+def _differentiable_unique(x, tolerance=1e-6):
+    """
+    Differentiable approximation of torch.unique using soft clustering.
+    
+    Args:
+        x: Input tensor
+        tolerance: Tolerance for grouping values together
+    
+    Returns:
+        Tensor of unique values (differentiable)
+    """
+    if x.numel() == 0:
+        return torch.tensor([])
+    
+    x_flat = x.flatten()
+    sorted_x, _ = torch.sort(x_flat)
+    
+    diffs = sorted_x[1:] - sorted_x[:-1]
+    boundaries = (diffs > tolerance).nonzero().squeeze()
+    
+    if boundaries.numel() == 0:
+        return sorted_x[:1]
+    
+    if boundaries.dim() == 0:
+        boundaries = boundaries.unsqueeze(0)
+    
+    unique_indices = torch.cat([torch.tensor([0], device=x.device), boundaries + 1])
+    unique_values = sorted_x[unique_indices]
+    
+    return unique_values
 
 
 def piecewise_linear_approximation(x, eps=1e-3):
@@ -261,14 +304,16 @@ def piecewise_linear_approximation(x, eps=1e-3):
     if not isinstance(x, torch.Tensor):
         return x
     
-    unique_values = torch.unique(x)
+    unique_values = _differentiable_unique(x)
     
     if len(unique_values) <= 1:
         return x
     
+    x_device = x.device
     result = x.clone()
     
     for v in unique_values:
+        v = v.to(x_device)
         mask = torch.abs(x - v) < eps
         if mask.any():
             result[mask] = v + (x[mask] - v) * (1.0 / eps)
